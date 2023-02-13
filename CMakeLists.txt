@@ -17,20 +17,43 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_ros
   pcl_ros
   cw1_world_spawner
-  image_transport
-  cv_bridge
+  # image_transport
+  # sensor_msgs
+  # cv_bridge
 )
 
-find_package(OpenCV PATHS /usr/lib/x86_64-linux-gnu/cmake/opencv4 REQUIRED)
+# find_package(Boost REQUIRED COMPONENTS system)
+# include_directories(${Boost_INCLUDE_DIR})
+# link_directories(${Boost_LIBRARY_DIR})
+# find_package(OpenCV PATHS /usr/lib/x86_64-linux-gnu/cmake/opencv4 REQUIRED)
+
+# set(OpenCV_DIR /usr/lib/x86_64-linux-gnu/cmake/opencv4)
+# find_package(OpenCV REQUIRED)
+# include_directories(${OpenCV_INCLUDE_DIRS})
+# link_directories(${OpenCV_LIBRARY_DIRS})
+# add_definitions(${OpenCV_DEFINITIONS})
+
+# # cv_bridge
+# # set(cv_bridge_DIR /usr/local/share/cv_bridge/cmake)
+# find_package(cv_bridge PATHS /opt/ros/noetic/share/cv_bridge/cmake REQUIRED)
+# include_directories(${cv_bridge_INCLUDE_DIRS})
+# link_directories(${cv_bridge_LIBRARY_DIRS})
+# add_definitions(${cv_bridge_DEFINITIONS})
+
+# # include_directories(include ${Boost_INCLUDE_DIRS})
+
+
+# set(OpenCV_LIBS opencv_core opencv_imgproc opencv_calib3d opencv_video opencv_features2d opencv_ml opencv_highgui opencv_objdetect)
+
 
 # If the package has been found, several variables will
 # be set, you can find the full list with descriptions
 # in the OpenCVConfig.cmake file.
 # Print some message showing some of them
-message(STATUS "OpenCV library status:")
-message(STATUS "    version: ${OpenCV_VERSION}")
-message(STATUS "    libraries: ${OpenCV_LIBS}")
-message(STATUS "    include path: ${OpenCV_INCLUDE_DIRS}")
+# message(STATUS "OpenCV library status:")
+# message(STATUS "    version: ${OpenCV_VERSION}")
+# message(STATUS "    libraries: ${OpenCV_LIBS}")
+# message(STATUS "    include path: ${OpenCV_INCLUDE_DIRS}")
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -75,7 +98,10 @@ message(STATUS "    include path: ${OpenCV_INCLUDE_DIRS}")
 # Generate services in the 'srv' folder
 add_service_files(
   FILES
-  example.srv
+  # example.srv
+  set_arm.srv
+  pass_through.srv
+
 )
 
 ## Generate actions in the 'action' folder
@@ -90,6 +116,7 @@ generate_messages(
   DEPENDENCIES
   std_msgs
   geometry_msgs
+  # sensor_msgs
 )
 
 ################################################
@@ -124,7 +151,8 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES move_panda
- CATKIN_DEPENDS message_runtime cw1_world_spawner
+ CATKIN_DEPENDS message_runtime cw1_world_spawner 
+#  cv_bridge image_transport sensor_msgs
 #  DEPENDS system_lib
 )
 
@@ -137,7 +165,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS}
+  # ${OpenCV_INCLUDE_DIRS}
 )
 
 # Declare a C++ library
@@ -176,8 +204,7 @@ target_link_libraries(cw1_solution_node
   ${catkin_LIBRARIES}
   ${PROJECT_NAME}_cw1_class_lib
   # ${OpenCV_LIBS}
-  ${OpenCV_INCLUDE_DIRS}
-
+  # ${Boost_LIBRARIES}
 )
 
 #############

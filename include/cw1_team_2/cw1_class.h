@@ -39,12 +39,13 @@ solution is contained within the cw1_team_<your_team_number> package */
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/search/kdtree.h>
 #include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/segmentation/extract_clusters.h>
 
 // OpenCV includes
-#include <image_transport/image_transport.h>
-#include <opencv2/highgui/highgui.hpp>
-#include <cv_bridge/cv_bridge.h>
-#include <opencv2/opencv.hpp>
+// #include <image_transport/image_transport.h>
+// #include <cv_bridge/cv_bridge.h>
+// #include <opencv2/highgui/highgui.hpp>
+// #include <opencv2/opencv.hpp>
 
 // TF specific includes
 #include <tf/transform_broadcaster.h>
@@ -61,7 +62,9 @@ typedef PointC::Ptr PointCPtr;
 #include "cw1_world_spawner/Task3Service.h"
 
 // // include any services created in this package
-// #include "cw1_team_x/example.h"
+#include "cw1_team_2/set_arm.h"
+#include "cw1_team_2/pass_through.h"
+
 
 class cw1
 {
@@ -115,12 +118,31 @@ public:
 
   std::vector<std::string>
   task_2(std::vector<geometry_msgs::PointStamped> basket_locs);
+  
+  bool task_3();
 
   std::string 
   identify_basket();
 
-  void 
-  imageCallback(const sensor_msgs::ImageConstPtr& msg);
+void cloudCallBackOne(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
+
+  void pubFilteredPCMsg(ros::Publisher & pc_pub, PointC & pc);
+  
+  // void separateKMeans(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud, std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters);
+
+  bool passThroughCallback(cw1_team_2::pass_through::Request &request, cw1_team_2::pass_through::Response &response);
+  bool setArmCallback(cw1_team_2::set_arm::Request &request, cw1_team_2::set_arm::Response &response);
+
+
+  void computeCubeCentroid(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud, Eigen::Vector4f &centroid);
+
+  void separateKMeans(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &cloud, std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &clusters);
+
+
+
+  void applyPT(PointCPtr &in_cloud_ptr, PointCPtr &out_cloud_ptr);
+
+  // void imageCallback(const sensor_msgs::ImageConstPtr& msg);
 
   /* ----- class member variables ----- */
 
@@ -141,6 +163,10 @@ public:
   ros::ServiceServer t1_service_;
   ros::ServiceServer t2_service_;
   ros::ServiceServer t3_service_;
+
+ /** \brief service server for task 3 */
+  ros::ServiceServer set_arm_srv_;
+  ros::ServiceServer pass_through_srv_;
 
   /** \brief MoveIt interface to move groups to seperate the arm and the gripper,
   * these are defined in urdf. */

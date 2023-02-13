@@ -68,9 +68,15 @@
   <depend>message_runtime</depend>
   <depend>pcl_ros</depend>
   <depend>cw1_world_spawner</depend>
-  <depend>OpenCV</depend>
-  <depend>image_transport</depend>
-  <depend>cv_bridge</depend>
+  <!-- <depend>OpenCV</depend>
+  <depend>image_transport</depend> -->
+  <!-- <depend>cv_bridge</depend> -->
+  <!-- <depend>sensor_msgs</depend> -->
+
+  <!-- <build_depend>cv_bridge</build_depend>
+  <build_export_depend>cv_bridge</build_export_depend>
+  <exec_depend>cv_bridge</exec_depend> -->
+
 
 
   <!-- The export tag contains other, unspecified, tags -->
