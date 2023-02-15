@@ -11,6 +11,7 @@ typedef pcl::PointXYZRGBA PointT;
 typedef pcl::PointCloud<PointT> PointC;
 typedef PointC::Ptr PointCPtr;
 
+
 ///////////////////////////////////////////////////////////////////////////////
 
 cw1::cw1(ros::NodeHandle nh):
@@ -59,8 +60,11 @@ cw1::cw1(ros::NodeHandle nh):
   // Define public variables
   g_vg_leaf_sz = 0.01; // VoxelGrid leaf size: Better in a config file
   g_pt_thrs_min = 0.0; // PassThrough min thres: Better in a config file
-  g_pt_thrs_max = 0.805; // PassThrough max thres: Better in a config file
+  g_pt_thrs_max = 0.77; // PassThrough max thres: Better in a config file
+  // g_pt_thrs_max = 0.805; // PassThrough max thres: Better in a config file
   g_k_nn = 50; // Normals nn size: Better in a config file
+  offset_x = 0.170;
+  offset_y = -0.130;
 
   ROS_INFO("cw1 class initialised");
 }
@@ -436,29 +440,341 @@ cw1::task_3()
 
   // currently doesn't work, need to fix
 
-  std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> clusters;
+  // std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> clusters;
+  std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> clusters;
+
   
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
+  // printing state
+  ROS_INFO("Starting to cluster");
+
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGBA>);
+
   copyPointCloud(*g_cloud_filtered, *cloud);
+
+  ROS_INFO("Cloud size: %lu", cloud->size());
+
+  // g_cloud_filtered = PointCPtr = pcl::PointCloud<pcl::PointXYZRGBA>::Ptr
 
   // issue is in this function - possibly due to the fact that the cloud is not being passed by reference or const related
   // check: https://stackoverflow.com/questions/13450838/why-does-pcl-separateclustersextract-require-a-non-const-pointer-to-a-cloud
-  separateKMeans(cloud, clusters);
+  // separateKMeans(cloud, clusters);
 
-  int counter = 1;
+  // const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &cloud, std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &clusters
+
+  //TODO: Test with PointXYZRGBA insteqd to get colour directly from the cloud
+  
+  // // Create the KdTree object for the search method of the extraction
+  // pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+  // tree->setInputCloud(cloud);
+
+  // std::vector<pcl::PointIndices> cluster_indices;
+  // pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+  // ec.setClusterTolerance (0.02); // 2cm
+  // ec.setMinClusterSize (100); // change these values
+  // ec.setMaxClusterSize (25000);
+  // ec.setSearchMethod (tree);
+  // ec.setInputCloud (cloud);
+  // ec.extract (cluster_indices);
+
+
+  // int j = 0;
+  // for (const auto& cluster : cluster_indices)
+  // {
+  //   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
+  //   for (const auto& idx : cluster.indices) {
+  //     cloud_cluster->push_back((*cloud)[idx]);
+  //   } //*
+  //   cloud_cluster->width = cloud_cluster->size ();
+  //   cloud_cluster->height = 1;
+  //   cloud_cluster->is_dense = true;
+  //   // print in ros
+  //   ROS_INFO("PointCloud representing the Cluster: %lu data points.", cloud_cluster->size());
+  //   clusters.push_back(cloud_cluster);
+  //   // std::cout << "PointCloud representing the Cluster: " << cloud_cluster->size () << " data points." << std::endl;
+  //   // std::stringstream ss;
+  //   // ss << std::setw(4) << std::setfill('0') << j;
+  //   // writer.write<pcl::PointXYZ> ("cloud_cluster_" + ss.str () + ".pcd", *cloud_cluster, false); //*
+  //   j++;
+  // }
+  // ROS_INFO("Finished clustering");
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Clustering algorithm with XYZRGBA cloud
+    
+  // Create the KdTree object for the search method of the extraction
+  pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGBA>);
+  tree->setInputCloud(cloud);
+
+  std::vector<pcl::PointIndices> cluster_indices;
+  pcl::EuclideanClusterExtraction<pcl::PointXYZRGBA> ec;
+  ec.setClusterTolerance (0.02); // 2cm
+  ec.setMinClusterSize (100); // change these values
+  ec.setMaxClusterSize (25000);
+  ec.setSearchMethod (tree);
+  ec.setInputCloud (cloud);
+  ec.extract (cluster_indices);
+
+
+  int j = 0;
+  for (const auto& cluster : cluster_indices)
+  {
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZRGBA>);
+    for (const auto& idx : cluster.indices) {
+      cloud_cluster->push_back((*cloud)[idx]);
+    } //*
+    cloud_cluster->width = cloud_cluster->size ();
+    cloud_cluster->height = 1;
+    cloud_cluster->is_dense = true;
+    // print in ros
+    ROS_INFO("PointCloud representing the Cluster: %lu data points.", cloud_cluster->size());
+    clusters.push_back(cloud_cluster);
+    // std::cout << "PointCloud representing the Cluster: " << cloud_cluster->size () << " data points." << std::endl;
+    // std::stringstream ss;
+    // ss << std::setw(4) << std::setfill('0') << j;
+    // writer.write<pcl::PointXYZ> ("cloud_cluster_" + ss.str () + ".pcd", *cloud_cluster, false); //*
+    j++;
+  }
+  ROS_INFO("Finished clustering");
+
+
+
+  // for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
+  // {
+  //   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
+  //   for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
+  //     cloud_cluster->points.push_back (cloud->points[*pit]); //*
+  //   cloud_cluster->width = cloud_cluster->points.size ();
+  //   cloud_cluster->height = 1;
+  //   cloud_cluster->is_dense = true;
+
+  //   clusters.push_back(cloud_cluster);
+  // }
+
+  // int counter = 1;
+
+
+  
+  // std::vector<std::tuple<geometry_msgs::Point, Color>> cube_centroids;
+  // std::vector<std::tuple<geometry_msgs::Point, Color>> box_centroids;
   
   for (auto cluster : clusters)
   {
     Eigen::Vector4f centroid;
     pcl::compute3DCentroid(*cluster, centroid);
     // print cluster centroid 
-    ROS_INFO("Cluster centroid %x: %f, %f, %f", counter, centroid[0], centroid[1], centroid[2]);
-    counter++;
+    // ROS_INFO("Cluster centroid %x: %f, %f, %f", counter, centroid[0], centroid[1], centroid[2]);
+    // if (cluster->size() > cube_size_threshold_) 
+
+    geometry_msgs::Point centroid_position;
+    double precision = 1000.0;
+
+    centroid_position.x = std::round(centroid[0] * precision) / precision;
+    centroid_position.y = std::round(centroid[1] * precision) / precision;
+    centroid_position.z = std::round(centroid[2] * precision) / precision;
+
+    int num_points = cluster->size();
+    int random_point = rand() % num_points;
+    uint32_t rgb = *reinterpret_cast<int*>(&cluster->points[random_point].rgb);
+    uint8_t r = (rgb >> 16) & 0x0000ff;
+    uint8_t g = (rgb >> 8)  & 0x0000ff;
+    uint8_t b = (rgb)       & 0x0000ff;
+
+    Color cluster_color;
+
+
+
+    ROS_WARN("Color of point cloud: %d, %d, %d", r, g, b);
+    if (g > r && g > b)
+    {
+      cluster_color = Color::none;
+    }
+    else if (r > g && r > b)
+    {
+      cluster_color = Color::red;
+    }
+    else if (b > r && b > g)
+    {
+      cluster_color = Color::blue;
+    }
+    else if (r == b)
+    {
+      cluster_color = Color::purple;
+    } 
+    else
+    {
+      cluster_color = Color::none;
+    }
+
+    if (cluster->size() < 1000)
+    {
+      cube_centroids.push_back(std::make_tuple(centroid_position, cluster_color));
+    }
+    else
+    {
+      basket_centroids.push_back(std::make_tuple(centroid_position, cluster_color));
+    }
+
+    // counter++;
   }
+
+  // define grasping as from above
+  // tf2::Quaternion q_x180deg(-1, 0, 0, 0);
+
+  // // determine the grasping orientation
+  // tf2::Quaternion q_object;
+  // q_object.setRPY(0, 0, angle_offset_);
+  // tf2::Quaternion q_result = q_x180deg * q_object;
+  // geometry_msgs::Quaternion grasp_orientation = tf2::toMsg(q_result);
+
+  geometry_msgs::Pose cube_pose;
+  cube_pose.orientation = grasp_orientation;
+  cube_pose.position.z = 0.35;
+
+  geometry_msgs::Pose reset_pose;
+  reset_pose.orientation = grasp_orientation;
+  reset_pose.position.x = 0.54;
+  reset_pose.position.y = 0.0;
+  reset_pose.position.z = 0.35;
+  bool reset = moveArm(reset_pose);
+
+
+  ROS_INFO("Starting approach to identified cubes");
+
+  // ROS_INFO("Number of cubes: %x", cube_centroids.size());
+  // int counter_2 = 1;
+  for (auto cube : cube_centroids)
+  {
+    ROS_INFO("Cube centroid position");
+    ROS_ERROR("Cube centroid: %f, %f, %f", grasp_pose.position.x - std::get<0>(cube).x,
+      grasp_pose.position.y - std::get<0>(cube).y, grasp_pose.position.z - std::get<0>(cube).z);
+    ROS_ERROR("Cube centroid: %f, %f, %f", std::get<0>(cube).x, std::get<0>(cube).y, std::get<0>(cube).z);
+
+    cube_pose.position.x = grasp_pose.position.x - std::get<0>(cube).y + 0.0425;
+    cube_pose.position.y = grasp_pose.position.y - std::get<0>(cube).x;
+
+    geometry_msgs::Pose basket_pose;
+    basket_pose.orientation = grasp_orientation;
+
+    for (auto basket : basket_centroids)
+    {
+      if (std::get<1>(basket) == std::get<1>(cube))
+      {
+        basket_pose.position.x = grasp_pose.position.x - std::get<0>(basket).y + 0.0425;
+        basket_pose.position.y = grasp_pose.position.y - std::get<0>(basket).x;
+        break;
+      }
+    }
+
+    float basket_height = 0.35;
+    float cube_height = 0.15;
+    
+    bool success = true;
+
+    // Move the arm above the cube
+    success *= moveArm(cube_pose);
+
+    // Open the gripper
+    success *= moveGripper(gripper_open_);
+
+    // Lower the arm to the cube
+    cube_pose.position.z = cube_height;
+    success *= moveArm(cube_pose);
+
+    // Close the gripper
+    success *= moveGripper(gripper_closed_);
+
+    // Raise the arm
+    cube_pose.position.z = basket_height;
+    success *= moveArm(cube_pose);
+
+    // Move the arm above the basket
+    // geometry_msgs::Pose basket_setup_pose;
+    // basket_setup_pose.position.x = basket_pose.position.x;
+    // basket_setup_pose.position.y = basket_pose.position.y;
+    // basket_setup_pose.position.z = basket_height;
+
+    // success *= moveArm(basket_setup_pose);
+
+    basket_pose.position.z = basket_height;
+    success *= moveArm(basket_pose);
+
+    // Lower the arm to the basket
+    // basket_pose.position.z = z_offset_;
+    // success *= moveArm(basket_pose);
+
+    // Open the gripper
+    success *= moveGripper(gripper_open_);
+
+    cube_centroids.clear();
+    basket_centroids.clear();
+
+  }
+
+  // /////////////////////////////////
+  // // Test for cube 1
+
+  // ROS_ERROR("Cube centroid: %f, %f, %f", grasp_pose.position.x - std::get<0>(cube_centroids.at(0)).x,
+  // grasp_pose.position.y - std::get<0>(cube_centroids.at(0)).y, grasp_pose.position.z - std::get<0>(cube_centroids.at(0)).z);
+  // ROS_ERROR("Cube centroid: %f, %f, %f", std::get<0>(cube_centroids.at(0)).x, std::get<0>(cube_centroids.at(0)).y, std::get<0>(cube_centroids.at(0)).z);
+  // //     cube_pose.position.x = std::abs(std::get<0>(cube).x);
+  // // cube_pose.position.x = std::get<0>(cube).x;
+  // // cube_pose.position.y = std::get<0>(cube).y;
+  // // grasp_pose.position.x 
+  // cube_pose.position.x = grasp_pose.position.x - std::get<0>(cube_centroids.at(0)).x + offset_x;
+  // cube_pose.position.y = grasp_pose.position.y - std::get<0>(cube_centroids.at(0)).y + offset_y;
+
+  // // bool success = true;
+
+  // // move the arm above the object
+  // success *= moveArm(cube_pose);
+  // if (not success) 
+  // {
+  //   ROS_ERROR("Moving arm to pick approach pose failed");
+  //   return false;
+  // }
+
+  // /////////////////////////////////
+  // // Test for cube 2
+
+  //   // ROS_ERROR("Cube centroid: %f, %f, %f", grasp_pose.position.x - std::get<0>(cube_centroids.at(1)).x,
+  // // grasp_pose.position.y - std::get<0>(cube_centroids.at(1)).y, grasp_pose.position.z - std::get<1>(cube_centroids.at(1)).z);
+  // // ROS_ERROR("Cube centroid: %f, %f, %f", std::get<0>(cube_centroids.at(1)).x, std::get<0>(cube_centroids.at(1)).y, std::get<0>(cube_centroids.at(1)).z);
+  // //     cube_pose.position.x = std::abs(std::get<0>(cube).x);
+  // // cube_pose.position.x = std::get<0>(cube).x;
+  // // cube_pose.position.y = std::get<0>(cube).y;
+  // // grasp_pose.position.x 
+  // cube_pose.position.x = grasp_pose.position.x - std::get<0>(cube_centroids.at(1)).x + offset_x;
+  // cube_pose.position.y = grasp_pose.position.y - std::get<0>(cube_centroids.at(1)).y + offset_y;
+
+  // // bool success = true;
+
+  // // move the arm above the object
+  // success *= moveArm(cube_pose);
+  // if (not success) 
+  // {
+  //   ROS_ERROR("Moving arm to pick approach pose failed");
+  //   return false;
+  // }
+  // /////////////////////////////////
+
+
+  // // move the arm above the object
+  // success *= moveArm(grasp_pose);
+  // if (not success) 
+  // {
+  //   ROS_ERROR("Moving arm to pick approach pose failed");
+  //   return false;
+  // }
+
+
+  // for (auto cluster : clusters)
+
 
   return success;
 
-
+ 
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -564,11 +880,21 @@ bool
 cw1::passThroughCallback(cw1_team_2::pass_through::Request &request,
   cw1_team_2::pass_through::Response &response)
 {
+//   // set arm position, true if sucessful 
+//   bool success = true;
+
+//   g_pt_thrs_min = request.min;
+//   g_pt_thrs_max = request.max;
+
+//   response.success = success;
+
+//   return success;
+
   // set arm position, true if sucessful 
   bool success = true;
 
-  g_pt_thrs_min = request.min;
-  g_pt_thrs_max = request.max;
+  offset_x = request.min;
+  offset_y = request.max;
 
   response.success = success;
 
@@ -589,11 +915,18 @@ cw1::setArmCallback(cw1_team_2::set_arm::Request &request,
   tf2::Quaternion q_result = q_x180deg * q_object;
   geometry_msgs::Quaternion grasp_orientation = tf2::toMsg(q_result);
 
+  geometry_msgs::Pose camera_pose;
+  camera_pose.orientation = grasp_orientation;
+  camera_pose.position.x = 0.3773;
+  camera_pose.position.y = -0.0015;
+  camera_pose.position.z = 0.8773;
+
   geometry_msgs::Pose grasp_pose;
   grasp_pose.orientation = grasp_orientation;
-  grasp_pose.position.x = 0.3773;
-  grasp_pose.position.y = -0.0015;
-  grasp_pose.position.z = 0.8773;
+  grasp_pose.position.x = camera_pose.position.x  - std::get<0>(cube_centroids.at(0)).x + offset_x;
+  grasp_pose.position.y = camera_pose.position.y  - std::get<0>(cube_centroids.at(0)).y + offset_y;
+  grasp_pose.position.z = 0.25;
+
 
   // set arm position, true if sucessful 
   bool success = moveArm(grasp_pose);

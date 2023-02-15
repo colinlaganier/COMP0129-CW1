@@ -40,6 +40,7 @@ solution is contained within the cw1_team_<your_team_number> package */
 #include <pcl/search/kdtree.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
+#include <pcl/io/pcd_io.h>
 
 // OpenCV includes
 // #include <image_transport/image_transport.h>
@@ -254,6 +255,14 @@ void cloudCallBackOne(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
   
   /** \brief cw1Q1: TF listener definition. */
   tf::TransformListener g_listener_;
+
+  /** \brief Task 3 variables. */
+  enum Color {red, blue, purple, green, none};
+
+  std::vector<std::tuple<geometry_msgs::Point, Color>> cube_centroids;
+  std::vector<std::tuple<geometry_msgs::Point, Color>> basket_centroids;
+
+  double offset_x, offset_y;
   
 protected:
   /** \brief Debug mode. */
