@@ -22,6 +22,9 @@ solution is contained within the cw1_team_<your_team_number> package */
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_listener.h>
 
+// Config includes
+#include <iostream>
+#include <fstream>
 
 // PCL specific includes
 #include <pcl_conversions/pcl_conversions.h>
@@ -122,6 +125,7 @@ public:
   
   bool task_3();
 
+
   std::string 
   identify_basket();
 
@@ -135,7 +139,6 @@ void cloudCallBackOne(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
   bool setArmCallback(cw1_team_2::set_arm::Request &request, cw1_team_2::set_arm::Response &response);
 
 
-  void computeCubeCentroid(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud, Eigen::Vector4f &centroid);
 
   void separateKMeans(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &cloud, std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &clusters);
 
@@ -256,13 +259,65 @@ void cloudCallBackOne(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
   /** \brief cw1Q1: TF listener definition. */
   tf::TransformListener g_listener_;
 
+
+  /** \brief Task 2 functions*/
+  geometry_msgs::Pose
+  point2Pose(geometry_msgs::Point point);
+  bool
+  pickPlace(geometry_msgs::Point object, geometry_msgs::Point goal);
+
+  std::string
+  survey(geometry_msgs::Point basket_loc);
+  void
+  colourImageCallback(const sensor_msgs::Image& msg);
+
+  void
+  depthImageCallback(const sensor_msgs::Image& msg);
+
+  std::vector<int>
+  index2Pos(int pixel);
+
+  geometry_msgs::Pose
+  pixel2pose(std::vector<int> rows, std::vector<int> cols);
+
+    // FOR COLIN (CARL SUBSCRIBER VARIABLES)
+  std::vector<unsigned char, std::allocator<unsigned char> >colour_image_data;
+  ros::Subscriber colour_image_sub_;
+
+ 
+
   /** \brief Task 3 variables. */
   enum Color {red, blue, purple, green, none};
+  Color Colors;
+  Color identify_color(uint32_t rgb);
 
-  std::vector<std::tuple<geometry_msgs::Point, Color>> cube_centroids;
-  std::vector<std::tuple<geometry_msgs::Point, Color>> basket_centroids;
+  std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> cluster_pointclouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
 
-  double offset_x, offset_y;
+
+
+  float basket_height_ = 0.40;
+  float cube_height_ = 0.15;
+  float camera_offset_ = 0.0425;
+  int cube_basket_cutoff_ = 1000;
+  double position_precision_ = 1000.0;
+
+
+  geometry_msgs::Point scan_position_;
+  // scan_position_.x = 0.3773;
+  // scan_position_.y = -0.0015;
+  // scan_position_.z = 0.8773;
+
+
+
+  struct TargetBasket {
+    geometry_msgs::Point coordinates;
+    // Initialising distance to 100m to ensure that the first basket is always the closest
+    float distance_to_cube = 100;
+    bool is_empty = true;
+  };
+
+  cw1::TargetBasket identify_basket(std::tuple<geometry_msgs::Point, Color> cube, std::vector<std::tuple<geometry_msgs::Point, Color>> &basket_data);
+
   
 protected:
   /** \brief Debug mode. */

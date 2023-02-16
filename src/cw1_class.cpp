@@ -1,10 +1,5 @@
-/* feel free to change any part of this file, or delete this file. In general,
-you can do whatever you want with this template code, including deleting it all
-and starting from scratch. The only requirment is to make sure your entire 
-solution is contained within the cw1_team_<your_team_number> package */
-
 #include <cw1_team_2/cw1_class.h>
-// #include "cw1_class.h"
+
 
 // Not in use just added the PCL elements to check something 
 typedef pcl::PointXYZRGBA PointT;
@@ -17,16 +12,6 @@ typedef PointC::Ptr PointCPtr;
 cw1::cw1(ros::NodeHandle nh):
   g_cloud_ptr (new PointC), // input point cloud
   g_cloud_filtered (new PointC), // filtered point cloud
-  g_cloud_filtered2 (new PointC), // filtered point cloud
-  g_cloud_plane (new PointC), // plane point cloud
-  g_cloud_cylinder (new PointC), // cylinder point cloud
-  g_tree_ptr (new pcl::search::KdTree<PointT> ()), // KdTree
-  g_cloud_normals (new pcl::PointCloud<pcl::Normal>), // segmentation
-  g_cloud_normals2 (new pcl::PointCloud<pcl::Normal>), // segmentation
-  g_inliers_plane (new pcl::PointIndices), // plane seg
-  g_inliers_cylinder (new pcl::PointIndices), // cylidenr seg
-  g_coeff_plane (new pcl::ModelCoefficients), // plane coeff
-  g_coeff_cylinder (new pcl::ModelCoefficients), // cylinder coeff
   debug_ (false)
 {
   /* class constructor */
@@ -41,35 +26,26 @@ cw1::cw1(ros::NodeHandle nh):
   t3_service_  = nh_.advertiseService("/task3_start",
     &cw1::t3_callback, this);
 
-  // helper services 
-  set_arm_srv_ = nh_.advertiseService("/set_arm",
-  &cw1::setArmCallback, this);
-  pass_through_srv_ = nh_.advertiseService("/pass_through",
-  &cw1::passThroughCallback, this);
-
-  // OpenCV test
-  // cv::namedWindow("view");
-  // image_transport::ImageTransport it(nh_);
-  // image_transport::Subscriber sub = it.subscribe("camera/image", 1, &cw1::imageCallback, this);
-
-
   // Define the publishers
   g_pub_cloud = nh.advertise<sensor_msgs::PointCloud2> ("filtered_cloud", 1, true);
   g_pub_pose = nh.advertise<geometry_msgs::PointStamped> ("cyld_pt", 1, true);
   
   // Define public variables
-  g_vg_leaf_sz = 0.01; // VoxelGrid leaf size: Better in a config file
   g_pt_thrs_min = 0.0; // PassThrough min thres: Better in a config file
   g_pt_thrs_max = 0.77; // PassThrough max thres: Better in a config file
-  // g_pt_thrs_max = 0.805; // PassThrough max thres: Better in a config file
-  g_k_nn = 50; // Normals nn size: Better in a config file
-  offset_x = 0.170;
-  offset_y = -0.130;
+
+  // Defining the scanning position for task 3
+  scan_position_.x = 0.3773;
+  scan_position_.y = -0.0015;
+  scan_position_.z = 0.8773;
 
   ROS_INFO("cw1 class initialised");
 }
 
-///////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+// Callback functions
+////////////////////////////////////////////////////////////////////////////////
 
 bool
 cw1::t1_callback(cw1_world_spawner::Task1Service::Request &request,
@@ -117,6 +93,28 @@ cw1::t3_callback(cw1_world_spawner::Task3Service::Request &request,
   return true;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
+void
+cw1::cloudCallBackOne
+  (const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg)
+{
+  // Extract inout point cloud info
+  g_input_pc_frame_id_ = cloud_input_msg->header.frame_id;
+    
+  // Convert to PCL data type
+  pcl_conversions::toPCL (*cloud_input_msg, g_pcl_pc);
+  pcl::fromPCLPointCloud2 (g_pcl_pc, *g_cloud_ptr);
+
+  // Perform the filtering
+  applyPT(g_cloud_ptr, g_cloud_filtered);
+  
+  // Publish the data
+  pubFilteredPCMsg (g_pub_cloud, *g_cloud_filtered);
+  
+  return;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 bool
@@ -143,35 +141,6 @@ cw1::moveArm(geometry_msgs::Pose target_pose)
   return success;
 }
 
-// bool
-// cw1::moveArm(geometry_msgs::Pose target_pose)
-// {
-//   /* This function moves the move_group to the target position */
-
-//   // setup the target pose
-//   ROS_INFO("Setting pose target");
-//   arm_group_.setPoseTarget(target_pose);
-
-//   // create a movement plan for the arm
-//   ROS_INFO("Attempting to plan the path");
-//   moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-//   bool success = (arm_group_.plan(my_plan) ==
-//     moveit::planning_interface::MoveItErrorCode::SUCCESS);
-
-//   // google 'c++ conditional operator' to understand this line
-//   ROS_INFO("Visualising plan %s", success ? "" : "FAILED");
-
-//   // execute the planned path
-//   arm_group_.move();
-
-//   return success;
-// }
-// [ INFO] [1676243570.290049001, 8.813000000]: Approach pose: 
-// [ INFO] [1676243570.290066324, 8.813000000]: x: 0.349304
-// [ INFO] [1676243570.290078276, 8.813000000]: y: -0.092831
-// [ INFO] [1676243570.290089928, 8.813000000]: z: 0.404000
-
-///////////////////////////////////////////////////////////////////////////////
 
 bool
 cw1::moveGripper(float width)
@@ -212,7 +181,8 @@ cw1::moveGripper(float width)
 ///////////////////////////////////////////////////////////////////////////////
 
 bool 
-cw1::task_1(geometry_msgs::PoseStamped object_loc, geometry_msgs::PointStamped goal_loc)
+cw1::task_1(geometry_msgs::PoseStamped object_loc, 
+  geometry_msgs::PointStamped goal_loc)
 {
   /* This function picks up an object using a pose and drop it at at goal pose */
 
@@ -377,437 +347,210 @@ cw1::identify_basket()
   return response;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Task 3
+////////////////////////////////////////////////////////////////////////////////
 
-// void 
-// cw1::imageCallback(const sensor_msgs::ImageConstPtr& msg)
-// {
-  // auto 
-//   // sensor_msgs::CvBridge bridge;
-//   // cv_bridge::CvImagePtr cv_ptr;
-
-//   // try
-//   // {
-//   //   cv::imshow("view", cv_bridge::toCvShare(msg, "bgr8")->image);
-//   //   cv::waitKey(30);
-//   // }
-//   // catch (cv_bridge::Exception& e)
-//   // {
-//   //   ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
-//   // }
-//   cv_bridge::CvImagePtr cv_ptr;   // Declare a CvImagePtr 
-//   try// Try to convert the ROS image to a CvImage
-//   {
-//     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-//   }
-//   catch (cv_bridge::Exception& e)
-//   {
-//     ROS_ERROR("cv_bridge exception: %s", e.what());
-//     return;
-//   }
-// }
-
-///////////////////////////////////////////////////////////////////////////////
 bool 
 cw1::task_3()
 {
+  // Move robot and camera to scannning pose 
+  geometry_msgs::Pose scan_pose = point2Pose(scan_position_);
+  bool success = true;
+  success *= moveArm(scan_pose);
 
-  // Go to viewing pose 
-
-  // define grasping as from above
-  tf2::Quaternion q_x180deg(-1, 0, 0, 0);
-
-  // determine the grasping orientation
-  tf2::Quaternion q_object;
-  q_object.setRPY(0, 0, angle_offset_);
-  tf2::Quaternion q_result = q_x180deg * q_object;
-  geometry_msgs::Quaternion grasp_orientation = tf2::toMsg(q_result);
-
-  geometry_msgs::Pose grasp_pose;
-  grasp_pose.orientation = grasp_orientation;
-  // experimentally found these values, need to be set
-  grasp_pose.position.x = 0.3773;
-  grasp_pose.position.y = -0.0015;
-  grasp_pose.position.z = 0.8773;
-
-  // set arm position, true if sucessful 
-  bool success = moveArm(grasp_pose);
-
-  if (not success) 
-  {
-    ROS_ERROR("Moving arm to grasping pose failed");
-    return false;
-  }
-
-  // currently doesn't work, need to fix
-
-  // std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> clusters;
-  std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> clusters;
-
-  
-  // printing state
   ROS_INFO("Starting to cluster");
 
-  // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
-  // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+  // Create snapshot of point cloud for processing
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGBA>);
-
   copyPointCloud(*g_cloud_filtered, *cloud);
 
-  ROS_INFO("Cloud size: %lu", cloud->size());
+  // Cluster the point cloud into separate objects
+  std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> clusters = cluster_pointclouds(cloud);
 
-  // g_cloud_filtered = PointCPtr = pcl::PointCloud<pcl::PointXYZRGBA>::Ptr
+  ROS_INFO("Finished clustering");
 
-  // issue is in this function - possibly due to the fact that the cloud is not being passed by reference or const related
-  // check: https://stackoverflow.com/questions/13450838/why-does-pcl-separateclustersextract-require-a-non-const-pointer-to-a-cloud
-  // separateKMeans(cloud, clusters);
+  // Create a vector of tuples containing the centroid position and color of each cluster
+  std::vector<std::tuple<geometry_msgs::Point, Color>> cube_data;
+  std::vector<std::tuple<geometry_msgs::Point, Color>> basket_data;
 
-  // const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &cloud, std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &clusters
-
-  //TODO: Test with PointXYZRGBA insteqd to get colour directly from the cloud
+  ROS_INFO("Starting object identification");
   
-  // // Create the KdTree object for the search method of the extraction
-  // pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
-  // tree->setInputCloud(cloud);
+  for (auto cluster : clusters)
+  {
+    // Compute the centroid of the cluster
+    Eigen::Vector4f centroid;
+    pcl::compute3DCentroid(*cluster, centroid);
 
-  // std::vector<pcl::PointIndices> cluster_indices;
-  // pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-  // ec.setClusterTolerance (0.02); // 2cm
-  // ec.setMinClusterSize (100); // change these values
-  // ec.setMaxClusterSize (25000);
-  // ec.setSearchMethod (tree);
-  // ec.setInputCloud (cloud);
-  // ec.extract (cluster_indices);
+    // Create a point to store the centroid position
+    geometry_msgs::Point centroid_position;
 
+    // Round to 3 decimal places
+    centroid_position.x = std::round(centroid[0] * position_precision_) / position_precision_;
+    centroid_position.y = std::round(centroid[1] * position_precision_) / position_precision_;
+    centroid_position.z = std::round(centroid[2] * position_precision_) / position_precision_;
 
-  // int j = 0;
-  // for (const auto& cluster : cluster_indices)
-  // {
-  //   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
-  //   for (const auto& idx : cluster.indices) {
-  //     cloud_cluster->push_back((*cloud)[idx]);
-  //   } //*
-  //   cloud_cluster->width = cloud_cluster->size ();
-  //   cloud_cluster->height = 1;
-  //   cloud_cluster->is_dense = true;
-  //   // print in ros
-  //   ROS_INFO("PointCloud representing the Cluster: %lu data points.", cloud_cluster->size());
-  //   clusters.push_back(cloud_cluster);
-  //   // std::cout << "PointCloud representing the Cluster: " << cloud_cluster->size () << " data points." << std::endl;
-  //   // std::stringstream ss;
-  //   // ss << std::setw(4) << std::setfill('0') << j;
-  //   // writer.write<pcl::PointXYZ> ("cloud_cluster_" + ss.str () + ".pcd", *cloud_cluster, false); //*
-  //   j++;
-  // }
-  // ROS_INFO("Finished clustering");
+    // Pick a random point in the cluster to determine the color of the cluster
+    int random_point = rand() % cluster->size();;
+    uint32_t rgb = *reinterpret_cast<int*>(&cluster->points[random_point].rgb);
 
-  /////////////////////////////////////////////////////////////////////////////
-  // Clustering algorithm with XYZRGBA cloud
-    
+    // Identifies the color of the cluster
+    Color cluster_color = identify_color(rgb);
+
+    // Identifies if cluster is a cube or a box and adds it to the correct vector
+    if (cluster->size() < cube_basket_cutoff_)
+    {
+      cube_data.push_back(std::make_tuple(centroid_position, cluster_color));
+    }
+    else
+    {
+      basket_data.push_back(std::make_tuple(centroid_position, cluster_color));
+    }
+  }
+
+  ROS_INFO("Finished object identification");
+
+  ROS_INFO("Starting pick and place operation");
+
+  // Loop through all cubes
+  for (auto cube : cube_data)
+  {
+    // Compute cube pose
+    geometry_msgs::Point cube_point;
+    cube_point.x = scan_position_.x - std::get<0>(cube).y + camera_offset_;
+    cube_point.y = scan_position_.y - std::get<0>(cube).x;
+    cube_point.z = 0.0;
+
+    // Identify target basket based on current cube color and position
+    TargetBasket target_basket = identify_basket(cube, basket_data);
+
+    // Verify that a basket was found for given cube
+    if (target_basket.is_empty)
+    {
+      ROS_INFO("No basket matching cube colour found");
+      continue;
+    }
+
+    // Pick and place cube in target basket
+    success *= pickPlace(cube_point, target_basket.coordinates);
+
+  }
+
+  ROS_INFO("Finished pick and place operation");
+
+  return success;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Task 3 helper functions
+////////////////////////////////////////////////////////////////////////////////
+
+std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr>
+cw1::cluster_pointclouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
+{
+  // Vector to store the clusters
+  std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> clusters;
+
   // Create the KdTree object for the search method of the extraction
   pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGBA>);
   tree->setInputCloud(cloud);
 
+  // Create a set of indices to be used in the extraction
   std::vector<pcl::PointIndices> cluster_indices;
-  pcl::EuclideanClusterExtraction<pcl::PointXYZRGBA> ec;
-  ec.setClusterTolerance (0.02); // 2cm
-  ec.setMinClusterSize (100); // change these values
-  ec.setMaxClusterSize (25000);
-  ec.setSearchMethod (tree);
-  ec.setInputCloud (cloud);
-  ec.extract (cluster_indices);
+  // Create the extraction object for the clusters
+  pcl::EuclideanClusterExtraction<pcl::PointXYZRGBA> cluster_extraction;
+  // Set the extraction parameters
+  cluster_extraction.setClusterTolerance(0.02); // 2cm
+  cluster_extraction.setMinClusterSize(100);  
+  cluster_extraction.setMaxClusterSize(10000);
+  cluster_extraction.setSearchMethod(tree);
+  cluster_extraction.setInputCloud(cloud);
+  cluster_extraction.extract(cluster_indices);
 
-
-  int j = 0;
+  // Loop through each cluster and store it in the vector
   for (const auto& cluster : cluster_indices)
   {
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_cluster(new pcl::PointCloud<pcl::PointXYZRGBA>);
     for (const auto& idx : cluster.indices) {
       cloud_cluster->push_back((*cloud)[idx]);
-    } //*
+    }
     cloud_cluster->width = cloud_cluster->size ();
     cloud_cluster->height = 1;
     cloud_cluster->is_dense = true;
-    // print in ros
     ROS_INFO("PointCloud representing the Cluster: %lu data points.", cloud_cluster->size());
     clusters.push_back(cloud_cluster);
-    // std::cout << "PointCloud representing the Cluster: " << cloud_cluster->size () << " data points." << std::endl;
-    // std::stringstream ss;
-    // ss << std::setw(4) << std::setfill('0') << j;
-    // writer.write<pcl::PointXYZ> ("cloud_cluster_" + ss.str () + ".pcd", *cloud_cluster, false); //*
-    j++;
-  }
-  ROS_INFO("Finished clustering");
-
-
-
-  // for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
-  // {
-  //   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
-  //   for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
-  //     cloud_cluster->points.push_back (cloud->points[*pit]); //*
-  //   cloud_cluster->width = cloud_cluster->points.size ();
-  //   cloud_cluster->height = 1;
-  //   cloud_cluster->is_dense = true;
-
-  //   clusters.push_back(cloud_cluster);
-  // }
-
-  // int counter = 1;
-
-
-  
-  // std::vector<std::tuple<geometry_msgs::Point, Color>> cube_centroids;
-  // std::vector<std::tuple<geometry_msgs::Point, Color>> box_centroids;
-  
-  for (auto cluster : clusters)
-  {
-    Eigen::Vector4f centroid;
-    pcl::compute3DCentroid(*cluster, centroid);
-    // print cluster centroid 
-    // ROS_INFO("Cluster centroid %x: %f, %f, %f", counter, centroid[0], centroid[1], centroid[2]);
-    // if (cluster->size() > cube_size_threshold_) 
-
-    geometry_msgs::Point centroid_position;
-    double precision = 1000.0;
-
-    centroid_position.x = std::round(centroid[0] * precision) / precision;
-    centroid_position.y = std::round(centroid[1] * precision) / precision;
-    centroid_position.z = std::round(centroid[2] * precision) / precision;
-
-    int num_points = cluster->size();
-    int random_point = rand() % num_points;
-    uint32_t rgb = *reinterpret_cast<int*>(&cluster->points[random_point].rgb);
-    uint8_t r = (rgb >> 16) & 0x0000ff;
-    uint8_t g = (rgb >> 8)  & 0x0000ff;
-    uint8_t b = (rgb)       & 0x0000ff;
-
-    Color cluster_color;
-
-
-
-    ROS_WARN("Color of point cloud: %d, %d, %d", r, g, b);
-    if (g > r && g > b)
-    {
-      cluster_color = Color::none;
-    }
-    else if (r > g && r > b)
-    {
-      cluster_color = Color::red;
-    }
-    else if (b > r && b > g)
-    {
-      cluster_color = Color::blue;
-    }
-    else if (r == b)
-    {
-      cluster_color = Color::purple;
-    } 
-    else
-    {
-      cluster_color = Color::none;
-    }
-
-    if (cluster->size() < 1000)
-    {
-      cube_centroids.push_back(std::make_tuple(centroid_position, cluster_color));
-    }
-    else
-    {
-      basket_centroids.push_back(std::make_tuple(centroid_position, cluster_color));
-    }
-
-    // counter++;
   }
 
-  // define grasping as from above
-  // tf2::Quaternion q_x180deg(-1, 0, 0, 0);
+  return clusters;
+}
 
-  // // determine the grasping orientation
-  // tf2::Quaternion q_object;
-  // q_object.setRPY(0, 0, angle_offset_);
-  // tf2::Quaternion q_result = q_x180deg * q_object;
-  // geometry_msgs::Quaternion grasp_orientation = tf2::toMsg(q_result);
+cw1::Color cw1::identify_color(uint32_t rgb)
+{
+  // Unpack RGB values from point
+  uint8_t r = (rgb >> 16) & 0x0000ff;
+  uint8_t g = (rgb >> 8)  & 0x0000ff;
+  uint8_t b = (rgb)       & 0x0000ff;
 
-  geometry_msgs::Pose cube_pose;
-  cube_pose.orientation = grasp_orientation;
-  cube_pose.position.z = 0.35;
-
-  geometry_msgs::Pose reset_pose;
-  reset_pose.orientation = grasp_orientation;
-  reset_pose.position.x = 0.54;
-  reset_pose.position.y = 0.0;
-  reset_pose.position.z = 0.35;
-  bool reset = moveArm(reset_pose);
-
-
-  ROS_INFO("Starting approach to identified cubes");
-
-  // ROS_INFO("Number of cubes: %x", cube_centroids.size());
-  // int counter_2 = 1;
-  for (auto cube : cube_centroids)
+  // Identifies the color of the cluster based on the RGB values
+  if (g > r && g > b)
   {
-    ROS_INFO("Cube centroid position");
-    ROS_ERROR("Cube centroid: %f, %f, %f", grasp_pose.position.x - std::get<0>(cube).x,
-      grasp_pose.position.y - std::get<0>(cube).y, grasp_pose.position.z - std::get<0>(cube).z);
-    ROS_ERROR("Cube centroid: %f, %f, %f", std::get<0>(cube).x, std::get<0>(cube).y, std::get<0>(cube).z);
+    return Color::none;
+  }
+  else if (r > g && r > b)
+  {
+    return Color::red;
+  }
+  else if (b > r && b > g)
+  {
+    return Color::blue;
+  }
+  else if (r == b)
+  {
+    return Color::purple;
+  } 
+  else
+  {
+    return Color::none;
+  }
+};
 
-    cube_pose.position.x = grasp_pose.position.x - std::get<0>(cube).y + 0.0425;
-    cube_pose.position.y = grasp_pose.position.y - std::get<0>(cube).x;
 
-    geometry_msgs::Pose basket_pose;
-    basket_pose.orientation = grasp_orientation;
-
-    for (auto basket : basket_centroids)
+cw1::TargetBasket 
+cw1::identify_basket(std::tuple<geometry_msgs::Point, Color> cube, 
+  std::vector<std::tuple<geometry_msgs::Point, Color>> &basket_data)
+{
+  // Create a target basket object to store the basket position and distance to cube
+  TargetBasket target_basket; 
+  // Loop through every baskets
+  for (const auto &basket : basket_data)
+  {
+    // If basket and cube are the same colour
+    if (std::get<1>(basket) == std::get<1>(cube))
     {
-      if (std::get<1>(basket) == std::get<1>(cube))
+      // Calculate distance between cube and basket
+      float distance_to_cube = sqrt(pow(std::get<0>(basket).x - std::get<0>(cube).x, 2) 
+        + pow(std::get<0>(basket).y - std::get<0>(cube).y, 2));
+
+      // If ditance to basket is smaller than current target basket, update target basket
+      if (distance_to_cube < target_basket.distance_to_cube)
       {
-        basket_pose.position.x = grasp_pose.position.x - std::get<0>(basket).y + 0.0425;
-        basket_pose.position.y = grasp_pose.position.y - std::get<0>(basket).x;
-        break;
+        // Computes position of basket relative to camera
+        target_basket.coordinates.x = scan_position_.x - std::get<0>(basket).y + camera_offset_;
+        target_basket.coordinates.y = scan_position_.y - std::get<0>(basket).x;
+        target_basket.coordinates.z = 0.0;
+        target_basket.distance_to_cube = distance_to_cube;
+        target_basket.is_empty = false;
       }
     }
-
-    float basket_height = 0.35;
-    float cube_height = 0.15;
-    
-    bool success = true;
-
-    // Move the arm above the cube
-    success *= moveArm(cube_pose);
-
-    // Open the gripper
-    success *= moveGripper(gripper_open_);
-
-    // Lower the arm to the cube
-    cube_pose.position.z = cube_height;
-    success *= moveArm(cube_pose);
-
-    // Close the gripper
-    success *= moveGripper(gripper_closed_);
-
-    // Raise the arm
-    cube_pose.position.z = basket_height;
-    success *= moveArm(cube_pose);
-
-    // Move the arm above the basket
-    // geometry_msgs::Pose basket_setup_pose;
-    // basket_setup_pose.position.x = basket_pose.position.x;
-    // basket_setup_pose.position.y = basket_pose.position.y;
-    // basket_setup_pose.position.z = basket_height;
-
-    // success *= moveArm(basket_setup_pose);
-
-    basket_pose.position.z = basket_height;
-    success *= moveArm(basket_pose);
-
-    // Lower the arm to the basket
-    // basket_pose.position.z = z_offset_;
-    // success *= moveArm(basket_pose);
-
-    // Open the gripper
-    success *= moveGripper(gripper_open_);
-
-    cube_centroids.clear();
-    basket_centroids.clear();
-
   }
 
-  // /////////////////////////////////
-  // // Test for cube 1
-
-  // ROS_ERROR("Cube centroid: %f, %f, %f", grasp_pose.position.x - std::get<0>(cube_centroids.at(0)).x,
-  // grasp_pose.position.y - std::get<0>(cube_centroids.at(0)).y, grasp_pose.position.z - std::get<0>(cube_centroids.at(0)).z);
-  // ROS_ERROR("Cube centroid: %f, %f, %f", std::get<0>(cube_centroids.at(0)).x, std::get<0>(cube_centroids.at(0)).y, std::get<0>(cube_centroids.at(0)).z);
-  // //     cube_pose.position.x = std::abs(std::get<0>(cube).x);
-  // // cube_pose.position.x = std::get<0>(cube).x;
-  // // cube_pose.position.y = std::get<0>(cube).y;
-  // // grasp_pose.position.x 
-  // cube_pose.position.x = grasp_pose.position.x - std::get<0>(cube_centroids.at(0)).x + offset_x;
-  // cube_pose.position.y = grasp_pose.position.y - std::get<0>(cube_centroids.at(0)).y + offset_y;
-
-  // // bool success = true;
-
-  // // move the arm above the object
-  // success *= moveArm(cube_pose);
-  // if (not success) 
-  // {
-  //   ROS_ERROR("Moving arm to pick approach pose failed");
-  //   return false;
-  // }
-
-  // /////////////////////////////////
-  // // Test for cube 2
-
-  //   // ROS_ERROR("Cube centroid: %f, %f, %f", grasp_pose.position.x - std::get<0>(cube_centroids.at(1)).x,
-  // // grasp_pose.position.y - std::get<0>(cube_centroids.at(1)).y, grasp_pose.position.z - std::get<1>(cube_centroids.at(1)).z);
-  // // ROS_ERROR("Cube centroid: %f, %f, %f", std::get<0>(cube_centroids.at(1)).x, std::get<0>(cube_centroids.at(1)).y, std::get<0>(cube_centroids.at(1)).z);
-  // //     cube_pose.position.x = std::abs(std::get<0>(cube).x);
-  // // cube_pose.position.x = std::get<0>(cube).x;
-  // // cube_pose.position.y = std::get<0>(cube).y;
-  // // grasp_pose.position.x 
-  // cube_pose.position.x = grasp_pose.position.x - std::get<0>(cube_centroids.at(1)).x + offset_x;
-  // cube_pose.position.y = grasp_pose.position.y - std::get<0>(cube_centroids.at(1)).y + offset_y;
-
-  // // bool success = true;
-
-  // // move the arm above the object
-  // success *= moveArm(cube_pose);
-  // if (not success) 
-  // {
-  //   ROS_ERROR("Moving arm to pick approach pose failed");
-  //   return false;
-  // }
-  // /////////////////////////////////
-
-
-  // // move the arm above the object
-  // success *= moveArm(grasp_pose);
-  // if (not success) 
-  // {
-  //   ROS_ERROR("Moving arm to pick approach pose failed");
-  //   return false;
-  // }
-
-
-  // for (auto cluster : clusters)
-
-
-  return success;
-
- 
+  return target_basket;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void
-cw1::cloudCallBackOne
-  (const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg)
-{
-  // Extract inout point cloud info
-  g_input_pc_frame_id_ = cloud_input_msg->header.frame_id;
-    
-  // Convert to PCL data type
-  pcl_conversions::toPCL (*cloud_input_msg, g_pcl_pc);
-  pcl::fromPCLPointCloud2 (g_pcl_pc, *g_cloud_ptr);
-
-  // Perform the filtering
-  // applyVX (g_cloud_ptr, g_cloud_filtered);
-  applyPT(g_cloud_ptr, g_cloud_filtered);
-  
-  // Segment plane and cylinder
-  //findNormals (g_cloud_filtered);
-  //segPlane (g_cloud_filtered);
-  // segCylind (g_cloud_filtered);
-  //findCylPose (g_cloud_cylinder);
-    
-  // Publish the data
-  //ROS_INFO ("Publishing Filtered Cloud 2");
-  pubFilteredPCMsg (g_pub_cloud, *g_cloud_filtered);
-  //pubFilteredPCMsg (g_pub_cloud, *g_cloud_cylinder);
-  
-  return;
-}
-
+// Point Cloud callback helper functions
 ////////////////////////////////////////////////////////////////////////////////
+
 void
 cw1::pubFilteredPCMsg (ros::Publisher &pc_pub,
                                PointC &pc)
@@ -834,104 +577,120 @@ cw1::applyPT (PointCPtr &in_cloud_ptr,
   return;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-void 
-cw1::computeCubeCentroid(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud,
-  Eigen::Vector4f &centroid)
-{
-  pcl::compute3DCentroid(*cloud, centroid);
-}
 
 ////////////////////////////////////////////////////////////////////////////////
-//PointCPtr’         {aka ‘boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGBA> >’} 
-// ‘const ConstPtr&’ {aka ‘const boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZ> >&’}
+// Task 2 helper functions
+////////////////////////////////////////////////////////////////////////////////
 
-void
-cw1::separateKMeans(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &cloud,
-  std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &clusters)
-{
-  // Create the KdTree object for the search method of the extraction
-  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
-  tree->setInputCloud (cloud);
+geometry_msgs::Pose
+cw1::point2Pose(geometry_msgs::Point point){
+  /* This function produces a "gripper facing down" pose given a xyz point */
 
-  std::vector<pcl::PointIndices> cluster_indices;
-  pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-  ec.setClusterTolerance (0.02); // 2cm
-  ec.setMinClusterSize (100); // change these values
-  ec.setMaxClusterSize (25000);
-  ec.setSearchMethod (tree);
-  ec.setInputCloud (cloud);
-  ec.extract (cluster_indices);
-
-  for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
-  {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
-    for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
-      cloud_cluster->points.push_back (cloud->points[*pit]); //*
-    cloud_cluster->width = cloud_cluster->points.size ();
-    cloud_cluster->height = 1;
-    cloud_cluster->is_dense = true;
-
-    clusters.push_back(cloud_cluster);
-  }
-}
-
-bool
-cw1::passThroughCallback(cw1_team_2::pass_through::Request &request,
-  cw1_team_2::pass_through::Response &response)
-{
-//   // set arm position, true if sucessful 
-//   bool success = true;
-
-//   g_pt_thrs_min = request.min;
-//   g_pt_thrs_max = request.max;
-
-//   response.success = success;
-
-//   return success;
-
-  // set arm position, true if sucessful 
-  bool success = true;
-
-  offset_x = request.min;
-  offset_y = request.max;
-
-  response.success = success;
-
-  return success;
-}
-
-bool 
-cw1::setArmCallback(cw1_team_2::set_arm::Request &request,
-  cw1_team_2::set_arm::Response &response)
-{
-
-  // define grasping as from above
+  // Position gripper above point
   tf2::Quaternion q_x180deg(-1, 0, 0, 0);
-
-  // determine the grasping orientation
+  // Gripper Orientation
   tf2::Quaternion q_object;
   q_object.setRPY(0, 0, angle_offset_);
   tf2::Quaternion q_result = q_x180deg * q_object;
-  geometry_msgs::Quaternion grasp_orientation = tf2::toMsg(q_result);
+  geometry_msgs::Quaternion orientation = tf2::toMsg(q_result);
 
-  geometry_msgs::Pose camera_pose;
-  camera_pose.orientation = grasp_orientation;
-  camera_pose.position.x = 0.3773;
-  camera_pose.position.y = -0.0015;
-  camera_pose.position.z = 0.8773;
+  // set the desired Pose
+  geometry_msgs::Pose pose;
+  pose.position = point;
+  pose.orientation = orientation;
 
-  geometry_msgs::Pose grasp_pose;
-  grasp_pose.orientation = grasp_orientation;
-  grasp_pose.position.x = camera_pose.position.x  - std::get<0>(cube_centroids.at(0)).x + offset_x;
-  grasp_pose.position.y = camera_pose.position.y  - std::get<0>(cube_centroids.at(0)).y + offset_y;
-  grasp_pose.position.z = 0.25;
-
-
-  // set arm position, true if sucessful 
-  bool success = moveArm(grasp_pose);
-
-  response.success = success;
-
-  return success;
+  return pose;
 }
+///////////////////////////////////////////////////////////////////////////////
+
+bool
+cw1::pickPlace(geometry_msgs::Point object, geometry_msgs::Point target)
+{
+  /* This function performs a pick and place task given an object position and
+  a target position */
+
+  // DEFINE GRIPPER POSES //
+  // Grasping Object //
+  geometry_msgs::Pose grasp_pose = point2Pose(object);
+  // grasp_pose.position.z += z_offset_; // Offset to align cube with gripper
+  grasp_pose.position.z = cube_height_; // Position gripper above object
+  // Approach and Takeaway //
+  geometry_msgs::Pose offset_pose = grasp_pose;
+  offset_pose.position.z += approach_distance_; // Position gripper above object
+  // Releasing Object //
+  geometry_msgs::Pose release_pose = grasp_pose;
+  release_pose.position = target;
+  release_pose.position.z += 0.325; // Position gripper above basket
+
+  // PERFORM PICK //
+  bool success = true;
+  ROS_INFO("PERFORMING PICK");
+  // Aproach object
+  success *= moveArm(offset_pose);
+  // Open gripper
+  success *= moveGripper(gripper_open_);
+  // Move to grasp object
+  success *= moveArm(grasp_pose);
+  // Close gripper
+  success *= moveGripper(gripper_closed_);
+  // Backaway from object
+  success *= moveArm(offset_pose);
+
+  // PERFORM PLACE //
+  // Move to basket
+  success *= moveArm(release_pose);
+  // Open gripper
+  success *= moveGripper(gripper_open_);
+
+  return true;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+std::string
+cw1::survey(geometry_msgs::Point point)
+{
+  /* This function will return the colour shown in camera, given a point of interest*/
+
+  // Define imaging pose
+  geometry_msgs::Pose image_pose = point2Pose(point);
+  image_pose.position.z += 0.3; //Offset above object
+  image_pose.position.x -= 0.04; //Offset of camera from end-effector
+  
+  // Move camera above object
+  bool success = moveArm(image_pose);
+  // Extract central pixel values from raw RGB data (Obtained from subsribed topic)
+  ROS_INFO("PHOTO CAPTURED");
+  int redValue = colour_image_data[461757];
+  int greenValue = colour_image_data[461758];
+  int blueValue = colour_image_data[461759];
+
+  // Determine Colour of Basket
+  std::string basketColour;
+  if (greenValue > redValue && greenValue > blueValue){
+    basketColour = "none";
+    ROS_INFO("NONE");
+  } else if (redValue > greenValue && redValue > blueValue){
+    basketColour = "red";
+    ROS_INFO("RED");
+  } else if (blueValue > redValue && blueValue > greenValue){
+    basketColour = "blue";
+    ROS_INFO("BLUE");
+  } else if (redValue == blueValue){
+    basketColour = "purple";
+    ROS_INFO("PURPLE");
+  } else{
+    basketColour = "Failed To Determine";
+  }
+  
+  return basketColour;
+}
+///////////////////////////////////////////////////////////////////////////////
+void
+cw1::colourImageCallback(const sensor_msgs::Image& msg)
+{
+  /* This is the callback function for the RGB camera subscriber */ 
+  this->colour_image_data = msg.data;
+
+  return;
+}
+///////////////////////////////////////////////////////////////////////////////
