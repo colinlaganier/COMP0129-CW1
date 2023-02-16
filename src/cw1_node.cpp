@@ -31,7 +31,7 @@ int main(int argc, char **argv){
   ros::Subscriber sub_cloud =
     nh.subscribe ("/r200/camera/depth_registered/points",
                   1,
-                  &cw1::cloudCallBackOne,
+                  &cw1::pointCloudCallback,
                   &cw_class);
   
 

@@ -22,6 +22,9 @@ solution is contained within the cw1_team_<your_team_number> package */
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <sensor_msgs/Image.h>
+
+
 // Config includes
 #include <iostream>
 #include <fstream>
@@ -83,7 +86,8 @@ public:
   bool 
   t1_callback(cw1_world_spawner::Task1Service::Request &request,
     cw1_world_spawner::Task1Service::Response &response);
-  bool 
+  // std::vector<std::string>  
+  bool
   t2_callback(cw1_world_spawner::Task2Service::Request &request,
     cw1_world_spawner::Task2Service::Response &response);
   bool 
@@ -117,36 +121,18 @@ public:
     *
     * \return true if pick and place operation is succesful
     */
-  bool 
-  task_1(geometry_msgs::PoseStamped object_loc, geometry_msgs::PointStamped goal_loc);
+
 
   std::vector<std::string>
   task_2(std::vector<geometry_msgs::PointStamped> basket_locs);
   
   bool task_3();
 
-
-  std::string 
-  identify_basket();
-
-void cloudCallBackOne(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
+  void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
 
   void pubFilteredPCMsg(ros::Publisher & pc_pub, PointC & pc);
-  
-  // void separateKMeans(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud, std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters);
-
-  bool passThroughCallback(cw1_team_2::pass_through::Request &request, cw1_team_2::pass_through::Response &response);
-  bool setArmCallback(cw1_team_2::set_arm::Request &request, cw1_team_2::set_arm::Response &response);
-
-
-
-  void separateKMeans(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &cloud, std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &clusters);
-
-
 
   void applyPT(PointCPtr &in_cloud_ptr, PointCPtr &out_cloud_ptr);
-
-  // void imageCallback(const sensor_msgs::ImageConstPtr& msg);
 
   /* ----- class member variables ----- */
 
@@ -168,10 +154,6 @@ void cloudCallBackOne(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
   ros::ServiceServer t2_service_;
   ros::ServiceServer t3_service_;
 
- /** \brief service server for task 3 */
-  ros::ServiceServer set_arm_srv_;
-  ros::ServiceServer pass_through_srv_;
-
   /** \brief MoveIt interface to move groups to seperate the arm and the gripper,
   * these are defined in urdf. */
   moveit::planning_interface::MoveGroupInterface arm_group_{"panda_arm"};
@@ -189,75 +171,27 @@ void cloudCallBackOne(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
 
   /** \brief ROS publishers. */
   ros::Publisher g_pub_cloud;
-  
-  /** \brief ROS geometry message point. */
-  geometry_msgs::PointStamped g_cyl_pt_msg;
-  
+
   /** \brief ROS pose publishers. */
   ros::Publisher g_pub_pose;
-  
-  /** \brief Voxel Grid filter's leaf size. */
-  double g_vg_leaf_sz;
   
   /** \brief Point Cloud (input) pointer. */
   PointCPtr g_cloud_ptr;
   
   /** \brief Point Cloud (filtered) pointer. */
-  PointCPtr g_cloud_filtered, g_cloud_filtered2;
-  
-  /** \brief Point Cloud (filtered) sensros_msg for publ. */
-  sensor_msgs::PointCloud2 g_cloud_filtered_msg;
-  
+  PointCPtr g_cloud_filtered;
+
   /** \brief Point Cloud (input). */
   pcl::PCLPointCloud2 g_pcl_pc;
   
-  /** \brief Voxel Grid filter. */
-  pcl::VoxelGrid<PointT> g_vx;
+  /** \brief Point Cloud (filtered) sensros_msg for publ. */
+  sensor_msgs::PointCloud2 g_cloud_filtered_msg;
   
   /** \brief Pass Through filter. */
   pcl::PassThrough<PointT> g_pt;
   
   /** \brief Pass Through min and max threshold sizes. */
   double g_pt_thrs_min, g_pt_thrs_max;
-  
-  /** \brief KDTree for nearest neighborhood search. */
-  pcl::search::KdTree<PointT>::Ptr g_tree_ptr;
-  
-  /** \brief Normal estimation. */
-  pcl::NormalEstimation<PointT, pcl::Normal> g_ne;
-  
-  /** \brief Cloud of normals. */
-  pcl::PointCloud<pcl::Normal>::Ptr g_cloud_normals, g_cloud_normals2;
-  
-  /** \brief Nearest neighborhooh size for normal estimation. */
-  double g_k_nn;
-  
-  /** \brief SAC segmentation. */
-  pcl::SACSegmentationFromNormals<PointT, pcl::Normal> g_seg; 
-  
-  /** \brief Extract point cloud indices. */
-  pcl::ExtractIndices<PointT> g_extract_pc;
-
-  /** \brief Extract point cloud normal indices. */
-  pcl::ExtractIndices<pcl::Normal> g_extract_normals;
-  
-  /** \brief Point indices for plane. */
-  pcl::PointIndices::Ptr g_inliers_plane;
-    
-  /** \brief Point indices for cylinder. */
-  pcl::PointIndices::Ptr g_inliers_cylinder;
-  
-  /** \brief Model coefficients for the plane segmentation. */
-  pcl::ModelCoefficients::Ptr g_coeff_plane;
-  
-  /** \brief Model coefficients for the culinder segmentation. */
-  pcl::ModelCoefficients::Ptr g_coeff_cylinder;
-  
-  /** \brief Point cloud to hold plane and cylinder points. */
-  PointCPtr g_cloud_plane, g_cloud_cylinder;
-  
-  /** \brief cw1Q1: TF listener definition. */
-  tf::TransformListener g_listener_;
 
 
   /** \brief Task 2 functions*/
@@ -268,23 +202,21 @@ void cloudCallBackOne(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
 
   std::string
   survey(geometry_msgs::Point basket_loc);
-  void
-  colourImageCallback(const sensor_msgs::Image& msg);
+  void colourImageCallback(const sensor_msgs::Image& msg);
 
-  void
-  depthImageCallback(const sensor_msgs::Image& msg);
-
-  std::vector<int>
-  index2Pos(int pixel);
-
-  geometry_msgs::Pose
-  pixel2pose(std::vector<int> rows, std::vector<int> cols);
-
-    // FOR COLIN (CARL SUBSCRIBER VARIABLES)
   std::vector<unsigned char, std::allocator<unsigned char> >colour_image_data;
   ros::Subscriber colour_image_sub_;
+  int colour_image_width_;
+  int colour_image_height_;
+  int colour_image_middle_;
+  int color_channels_ = 3;
 
- 
+  int image_width_ = 640;
+  int image_height_ = 480;
+  // int middle_index_ = color_channels_ * ((image_width_ * (image_height_ / 2 - 1)) + (image_width_ / 2));
+  // cw1::color_channels_ * ((cw1::colour_image_width_ * 
+  //         (cw1::colour_image_height_ / 2 - 1)) + (cw1::colour_image_width_ / 2));
+  // 461757
 
   /** \brief Task 3 variables. */
   enum Color {red, blue, purple, green, none};
@@ -292,7 +224,6 @@ void cloudCallBackOne(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
   Color identify_color(uint32_t rgb);
 
   std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> cluster_pointclouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
-
 
 
   float basket_height_ = 0.40;
@@ -303,11 +234,6 @@ void cloudCallBackOne(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
 
 
   geometry_msgs::Point scan_position_;
-  // scan_position_.x = 0.3773;
-  // scan_position_.y = -0.0015;
-  // scan_position_.z = 0.8773;
-
-
 
   struct TargetBasket {
     geometry_msgs::Point coordinates;
@@ -318,6 +244,7 @@ void cloudCallBackOne(const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg);
 
   cw1::TargetBasket identify_basket(std::tuple<geometry_msgs::Point, Color> cube, std::vector<std::tuple<geometry_msgs::Point, Color>> &basket_data);
 
+  bool load_config();
   
 protected:
   /** \brief Debug mode. */

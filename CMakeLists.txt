@@ -18,7 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   cw1_world_spawner
   # image_transport
-  # sensor_msgs
+  sensor_msgs
   # cv_bridge
 )
 
@@ -116,7 +116,7 @@ generate_messages(
   DEPENDENCIES
   std_msgs
   geometry_msgs
-  # sensor_msgs
+  sensor_msgs
 )
 
 ################################################
@@ -152,7 +152,8 @@ catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES move_panda
  CATKIN_DEPENDS message_runtime cw1_world_spawner 
-#  cv_bridge image_transport sensor_msgs
+#  cv_bridge image_transport 
+sensor_msgs
 #  DEPENDS system_lib
 )
 

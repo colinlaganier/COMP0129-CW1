@@ -71,7 +71,7 @@
   <!-- <depend>OpenCV</depend>
   <depend>image_transport</depend> -->
   <!-- <depend>cv_bridge</depend> -->
-  <!-- <depend>sensor_msgs</depend> -->
+  <depend>sensor_msgs</depend>
 
   <!-- <build_depend>cv_bridge</build_depend>
   <build_export_depend>cv_bridge</build_export_depend>

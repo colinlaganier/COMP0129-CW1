@@ -1,13 +1,27 @@
+/**
+  **********************************************************************************
+  * @file     cw1_class.cpp
+  * @author   Colin Laganier, Jacob Nash, Carl Parsons
+  * @date     2023-02-15
+  * @brief   This file contains the constructors and method for an IQS7222 Arduino library.
+  *          The goal of the library is to provide the functionalities for touch sensing
+  *			     to prototypes. Library derived from Azoteq's IQS266 library example.
+  **********************************************************************************
+  * @attention  Requires standard Arduino Libraries: Arduino.h, Wire.h.
+  */
+
 #include <cw1_team_2/cw1_class.h>
 
+#define CONFIG_FILE_PATH "./config/cw1.config"
 
 // Not in use just added the PCL elements to check something 
 typedef pcl::PointXYZRGBA PointT;
 typedef pcl::PointCloud<PointT> PointC;
 typedef PointC::Ptr PointCPtr;
 
-
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+// Constructor
+////////////////////////////////////////////////////////////////////////////////
 
 cw1::cw1(ros::NodeHandle nh):
   g_cloud_ptr (new PointC), // input point cloud
@@ -30,6 +44,11 @@ cw1::cw1(ros::NodeHandle nh):
   g_pub_cloud = nh.advertise<sensor_msgs::PointCloud2> ("filtered_cloud", 1, true);
   g_pub_pose = nh.advertise<geometry_msgs::PointStamped> ("cyld_pt", 1, true);
   
+  // Initialise ROS Subscribers //
+  colour_image_sub_ = nh_.subscribe("/r200/camera/color/image_raw", 1, &cw1::colourImageCallback, this);
+  // colour_image_sub_.subscribe(nh_, "/r200/camera/color/image_raw", 1);
+  // colour_image_sub_.registerCallback(boost::bind(&cw1::colourImageCallback, this, _1));
+
   // Define public variables
   g_pt_thrs_min = 0.0; // PassThrough min thres: Better in a config file
   g_pt_thrs_max = 0.77; // PassThrough max thres: Better in a config file
@@ -42,6 +61,17 @@ cw1::cw1(ros::NodeHandle nh):
   ROS_INFO("cw1 class initialised");
 }
 
+bool cw1::load_config()
+{
+  std::ifstream in(CONFIG_FILE_PATH);
+
+  if (!in.is_open())
+  {
+    ROS_ERROR("Cannot open configuration file from %s", CONFIG_FILE_PATH);
+    return false;
+  }
+  return true;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Callback functions
@@ -55,16 +85,14 @@ cw1::t1_callback(cw1_world_spawner::Task1Service::Request &request,
 
   ROS_INFO("The coursework solving callback for task 1 has been triggered");
 
-  bool success = task_1(request.object_loc, request.goal_loc);
-
-  // response.success = success;
+  bool success = pickPlace(request.object_loc.pose.position, request.goal_loc.point);
   
   return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool
+bool 
 cw1::t2_callback(cw1_world_spawner::Task2Service::Request &request,
   cw1_world_spawner::Task2Service::Response &response)
 {
@@ -72,8 +100,15 @@ cw1::t2_callback(cw1_world_spawner::Task2Service::Request &request,
 
   ROS_INFO("The coursework solving callback for task 2 has been triggered");
 
-  // geometry_msgs::PointStamped basket_locs[3] = {request.basket_locs};
   std::vector<std::string> colours = task_2(request.basket_locs);
+
+  // for (int i = 0; i < colours.size(); i++)
+  for (auto basket : colours)
+  {
+    ROS_INFO("%s", basket.c_str());
+  }
+
+  response.basket_colours = colours;
   
   return true;
 }
@@ -93,10 +128,41 @@ cw1::t3_callback(cw1_world_spawner::Task3Service::Request &request,
   return true;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+void
+cw1::colourImageCallback(const sensor_msgs::Image& msg)
+{
+  /* This is the callback function for the RGB camera subscriber */ 
+  
+  // Setting up the static variables at the first callback 
+  static bool setup = [&](){
+        // Camera feed resolution
+        cw1::colour_image_width_ = msg.width;
+        cw1::colour_image_height_ = msg.height;
+
+        // Computing the index of the middle pixel
+        cw1::colour_image_middle_ = cw1::color_channels_ * ((cw1::colour_image_width_ * 
+          (cw1::colour_image_height_ / 2)) + (cw1::colour_image_width_ / 2)) - cw1::color_channels_;
+        // Current output 70bbd -> pointer ?
+        ROS_ERROR("////////////////////////////////////////////////////////////////////////////////");
+        ROS_INFO("Image width: %d", cw1::colour_image_width_);
+        ROS_INFO("Image height: %d", cw1::colour_image_height_);
+        ROS_INFO("Middle pixel index: %x", cw1::colour_image_middle_);
+        ROS_ERROR("////////////////////////////////////////////////////////////////////////////////");
+
+        return true;
+    } ();
+
+  this->colour_image_data = msg.data;
+
+  return;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 void
-cw1::cloudCallBackOne
+cw1::pointCloudCallback
   (const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg)
 {
   // Extract inout point cloud info
@@ -115,7 +181,86 @@ cw1::cloudCallBackOne
   return;
 }
 
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+// Point Cloud callback helper functions
+////////////////////////////////////////////////////////////////////////////////
+
+void
+cw1::pubFilteredPCMsg (ros::Publisher &pc_pub,
+                               PointC &pc)
+{
+  // Publish the data
+  pcl::toROSMsg(pc, g_cloud_filtered_msg);
+  pc_pub.publish (g_cloud_filtered_msg);
+  
+  return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+cw1::applyPT (PointCPtr &in_cloud_ptr,
+                      PointCPtr &out_cloud_ptr)
+{
+  g_pt.setInputCloud (in_cloud_ptr);
+  g_pt.setFilterFieldName ("x");
+  g_pt.setFilterLimits(-1.0, 1.0);
+  g_pt.setFilterFieldName ("z");
+  g_pt.setFilterLimits (g_pt_thrs_min, g_pt_thrs_max);
+  g_pt.filter (*out_cloud_ptr);
+  
+  return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Task 1
+////////////////////////////////////////////////////////////////////////////////
+
+bool
+cw1::pickPlace(geometry_msgs::Point object, geometry_msgs::Point target)
+{
+  /* This function performs a pick and place task given an object position and
+  a target position */
+
+  // DEFINE GRIPPER POSES //
+  // Grasping Object //
+  geometry_msgs::Pose grasp_pose = point2Pose(object);
+  // grasp_pose.position.z += z_offset_; // Offset to align cube with gripper
+  grasp_pose.position.z = cube_height_; // Position gripper above object
+  // Approach and Takeaway //
+  geometry_msgs::Pose offset_pose = grasp_pose;
+  offset_pose.position.z += approach_distance_; // Position gripper above object
+  // Releasing Object //
+  geometry_msgs::Pose release_pose = grasp_pose;
+  release_pose.position = target;
+  release_pose.position.z += 0.325; // Position gripper above basket
+
+  // PERFORM PICK //
+  bool success = true;
+  ROS_INFO("PERFORMING PICK");
+  // Aproach object
+  success *= moveArm(offset_pose);
+  // Open gripper
+  success *= moveGripper(gripper_open_);
+  // Move to grasp object
+  success *= moveArm(grasp_pose);
+  // Close gripper
+  success *= moveGripper(gripper_closed_);
+  // Backaway from object
+  success *= moveArm(offset_pose);
+
+  // PERFORM PLACE //
+  // Move to basket
+  success *= moveArm(release_pose);
+  // Open gripper
+  success *= moveGripper(gripper_open_);
+
+  return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Task 1 helper functions
+////////////////////////////////////////////////////////////////////////////////
 
 bool
 cw1::moveArm(geometry_msgs::Pose target_pose)
@@ -141,6 +286,7 @@ cw1::moveArm(geometry_msgs::Pose target_pose)
   return success;
 }
 
+////////////////////////////////////////////////////////////////////////////////
 
 bool
 cw1::moveGripper(float width)
@@ -178,174 +324,95 @@ cw1::moveGripper(float width)
   return success;
 }
 
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
-bool 
-cw1::task_1(geometry_msgs::PoseStamped object_loc, 
-  geometry_msgs::PointStamped goal_loc)
-{
-  /* This function picks up an object using a pose and drop it at at goal pose */
+geometry_msgs::Pose
+cw1::point2Pose(geometry_msgs::Point point){
+  /* This function produces a "gripper facing down" pose given a xyz point */
 
-  // define grasping as from above
+  // Position gripper above point
   tf2::Quaternion q_x180deg(-1, 0, 0, 0);
-
-  // determine the grasping orientation
+  // Gripper Orientation
   tf2::Quaternion q_object;
   q_object.setRPY(0, 0, angle_offset_);
   tf2::Quaternion q_result = q_x180deg * q_object;
-  geometry_msgs::Quaternion grasp_orientation = tf2::toMsg(q_result);
+  geometry_msgs::Quaternion orientation = tf2::toMsg(q_result);
 
-  geometry_msgs::Pose grasp_pose = object_loc.pose;
-  grasp_pose.orientation = grasp_orientation;
-  grasp_pose.position.z += z_offset_;
+  // set the desired Pose
+  geometry_msgs::Pose pose;
+  pose.position = point;
+  pose.orientation = orientation;
 
-  // set the desired pre-grasping pose
-  geometry_msgs::Pose approach_pose;
-  approach_pose = grasp_pose;
-  approach_pose.position.z += approach_distance_;
-
-  // Print the approach pose
-  ROS_INFO("Approach pose: ");
-  ROS_INFO("x: %f", approach_pose.position.x);
-  ROS_INFO("y: %f", approach_pose.position.y);
-  ROS_INFO("z: %f", approach_pose.position.z);
-
-
-  geometry_msgs::Pose drop_pose;
-  drop_pose = grasp_pose;
-  drop_pose.position = goal_loc.point;
-  drop_pose.position.z = 0.4; 
-
-  bool success = true;
-
-  ROS_INFO("Begining pick operation");
-
-  // move the arm above the object
-  success *= moveArm(approach_pose);
-
-  if (not success) 
-  {
-    ROS_ERROR("Moving arm to pick approach pose failed");
-    return false;
-  }
-
-  // open the gripper
-  success *= moveGripper(gripper_open_);
-
-  if (not success) 
-  {
-    ROS_ERROR("Opening gripper prior to pick failed");
-    return false;
-  }
-
-  // approach to grasping pose
-  success *= moveArm(grasp_pose);
-
-  if (not success) 
-  {
-    ROS_ERROR("Moving arm to grasping pose failed");
-    return false;
-  }
-
-  // grasp!
-  success *= moveGripper(gripper_closed_);
-
-  if (not success) 
-  {
-    ROS_ERROR("Closing gripper to grasp failed");
-    return false;
-  }
-
-  // retreat with object
-  success *= moveArm(approach_pose);
-
-  if (not success) 
-  {
-    ROS_ERROR("Retreating arm after picking failed");
-    return false;
-  }
-
-  success *= moveArm(drop_pose);
-
-  if (not success) 
-  {
-    ROS_ERROR("Retreating arm after picking failed");
-    return false;
-  }
-
-  // open the gripper
-  success *= moveGripper(gripper_open_);
-
-  if (not success) 
-  {
-    ROS_ERROR("Opening gripper prior to pick failed");
-    return false;
-  }
-
-  ROS_INFO("Pick operation successful");
-
-  return true;
-
+  return pose;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Task 2
+////////////////////////////////////////////////////////////////////////////////
 
-///////////////////////////////////////////////////////////////////////////////
 std::vector<std::string>
-cw1::task_2(std::vector<geometry_msgs::PointStamped> basket_locs) 
+cw1::task_2(std::vector<geometry_msgs::PointStamped> basket_locs)
 {
-  std::vector<std::string> basket_colours;  
+  // Determine number of baskets
+  int basketNum = basket_locs.size();
 
-  tf2::Quaternion q_x180deg(-1, 0, 0, 0);
+  // Initialise string vector (Service Response)
+  std::vector<std::string> basket_colours;
 
-  // determine the grasping orientation
-  tf2::Quaternion q_object;
-  q_object.setRPY(0, 0, angle_offset_);
-  tf2::Quaternion q_result = q_x180deg * q_object;
-  geometry_msgs::Quaternion grasp_orientation = tf2::toMsg(q_result);
-
-  geometry_msgs::Pose potential_basket;
-  
-  bool success = true; 
-
-  success = moveArm(potential_basket);
-
-    if (not success) 
-    {
-      ROS_ERROR("Retreating arm after picking failed");
-      // return false;
-    }
-
-
-  // for (size_t i = 0; i < sizeof(basket_locs); i++)
-  for (auto location : basket_locs)
-  {
-    geometry_msgs::Pose potential_basket;
-    potential_basket.orientation = grasp_orientation;
-    potential_basket.position = location.point;
-    potential_basket.position.z = 0.4;
-
-    bool success = true; 
-
-    success = moveArm(potential_basket);
-
-    if (not success) 
-    {
-      ROS_ERROR("Retreating arm after picking failed");
-      // return false;
-    }
-
-    basket_colours.push_back(identify_basket());
-
+  // Survey each potential basket location
+  for(unsigned int i = 0; i < basketNum; i++){
+    // Determine colour
+    std::string basketColour = survey(basket_locs[i].point);
+    // Add decision to vector
+    basket_colours.push_back(basketColour);
   }
+
   return basket_colours;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Task 2 helper functions
+////////////////////////////////////////////////////////////////////////////////
+
 std::string
-cw1::identify_basket()
+cw1::survey(geometry_msgs::Point point)
 {
-  std::string response = "None";
-  return response;
+  /* This function will return the colour shown in camera, given a point of interest*/
+
+  // Define imaging pose
+  geometry_msgs::Pose image_pose = point2Pose(point);
+  image_pose.position.z += 0.3; //Offset above object
+  image_pose.position.x -= 0.04; //Offset of camera from end-effector
+  
+  // Move camera above object
+  bool success = moveArm(image_pose);
+  // Extract central pixel values from raw RGB data (Obtained from subsribed topic)
+  ROS_INFO("PHOTO CAPTURED");
+  int redValue = colour_image_data[461757];
+  int greenValue = colour_image_data[461758];
+  int blueValue = colour_image_data[461759];
+
+  // Determine Colour of Basket
+  std::string basketColour;
+  if (greenValue > redValue && greenValue > blueValue){
+    basketColour = "none";
+    ROS_INFO("NONE");
+  } else if (redValue > greenValue && redValue > blueValue){
+    basketColour = "red";
+    ROS_INFO("RED");
+  } else if (blueValue > redValue && blueValue > greenValue){
+    basketColour = "blue";
+    ROS_INFO("BLUE");
+  } else if (redValue == blueValue){
+    basketColour = "purple";
+    ROS_INFO("PURPLE");
+  } else{
+    basketColour = "Failed To Determine";
+  }
+  
+  return basketColour;
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Task 3
@@ -433,7 +500,6 @@ cw1::task_3()
 
     // Pick and place cube in target basket
     success *= pickPlace(cube_point, target_basket.coordinates);
-
   }
 
   ROS_INFO("Finished pick and place operation");
@@ -484,6 +550,8 @@ cw1::cluster_pointclouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
   return clusters;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
 cw1::Color cw1::identify_color(uint32_t rgb)
 {
   // Unpack RGB values from point
@@ -514,6 +582,7 @@ cw1::Color cw1::identify_color(uint32_t rgb)
   }
 };
 
+///////////////////////////////////////////////////////////////////////////////
 
 cw1::TargetBasket 
 cw1::identify_basket(std::tuple<geometry_msgs::Point, Color> cube, 
@@ -546,151 +615,3 @@ cw1::identify_basket(std::tuple<geometry_msgs::Point, Color> cube,
 
   return target_basket;
 }
-
-////////////////////////////////////////////////////////////////////////////////
-// Point Cloud callback helper functions
-////////////////////////////////////////////////////////////////////////////////
-
-void
-cw1::pubFilteredPCMsg (ros::Publisher &pc_pub,
-                               PointC &pc)
-{
-  // Publish the data
-  pcl::toROSMsg(pc, g_cloud_filtered_msg);
-  pc_pub.publish (g_cloud_filtered_msg);
-  
-  return;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-void
-cw1::applyPT (PointCPtr &in_cloud_ptr,
-                      PointCPtr &out_cloud_ptr)
-{
-  g_pt.setInputCloud (in_cloud_ptr);
-  g_pt.setFilterFieldName ("x");
-  g_pt.setFilterLimits(-1.0, 1.0);
-  g_pt.setFilterFieldName ("z");
-  g_pt.setFilterLimits (g_pt_thrs_min, g_pt_thrs_max);
-  g_pt.filter (*out_cloud_ptr);
-  
-  return;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////
-// Task 2 helper functions
-////////////////////////////////////////////////////////////////////////////////
-
-geometry_msgs::Pose
-cw1::point2Pose(geometry_msgs::Point point){
-  /* This function produces a "gripper facing down" pose given a xyz point */
-
-  // Position gripper above point
-  tf2::Quaternion q_x180deg(-1, 0, 0, 0);
-  // Gripper Orientation
-  tf2::Quaternion q_object;
-  q_object.setRPY(0, 0, angle_offset_);
-  tf2::Quaternion q_result = q_x180deg * q_object;
-  geometry_msgs::Quaternion orientation = tf2::toMsg(q_result);
-
-  // set the desired Pose
-  geometry_msgs::Pose pose;
-  pose.position = point;
-  pose.orientation = orientation;
-
-  return pose;
-}
-///////////////////////////////////////////////////////////////////////////////
-
-bool
-cw1::pickPlace(geometry_msgs::Point object, geometry_msgs::Point target)
-{
-  /* This function performs a pick and place task given an object position and
-  a target position */
-
-  // DEFINE GRIPPER POSES //
-  // Grasping Object //
-  geometry_msgs::Pose grasp_pose = point2Pose(object);
-  // grasp_pose.position.z += z_offset_; // Offset to align cube with gripper
-  grasp_pose.position.z = cube_height_; // Position gripper above object
-  // Approach and Takeaway //
-  geometry_msgs::Pose offset_pose = grasp_pose;
-  offset_pose.position.z += approach_distance_; // Position gripper above object
-  // Releasing Object //
-  geometry_msgs::Pose release_pose = grasp_pose;
-  release_pose.position = target;
-  release_pose.position.z += 0.325; // Position gripper above basket
-
-  // PERFORM PICK //
-  bool success = true;
-  ROS_INFO("PERFORMING PICK");
-  // Aproach object
-  success *= moveArm(offset_pose);
-  // Open gripper
-  success *= moveGripper(gripper_open_);
-  // Move to grasp object
-  success *= moveArm(grasp_pose);
-  // Close gripper
-  success *= moveGripper(gripper_closed_);
-  // Backaway from object
-  success *= moveArm(offset_pose);
-
-  // PERFORM PLACE //
-  // Move to basket
-  success *= moveArm(release_pose);
-  // Open gripper
-  success *= moveGripper(gripper_open_);
-
-  return true;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-std::string
-cw1::survey(geometry_msgs::Point point)
-{
-  /* This function will return the colour shown in camera, given a point of interest*/
-
-  // Define imaging pose
-  geometry_msgs::Pose image_pose = point2Pose(point);
-  image_pose.position.z += 0.3; //Offset above object
-  image_pose.position.x -= 0.04; //Offset of camera from end-effector
-  
-  // Move camera above object
-  bool success = moveArm(image_pose);
-  // Extract central pixel values from raw RGB data (Obtained from subsribed topic)
-  ROS_INFO("PHOTO CAPTURED");
-  int redValue = colour_image_data[461757];
-  int greenValue = colour_image_data[461758];
-  int blueValue = colour_image_data[461759];
-
-  // Determine Colour of Basket
-  std::string basketColour;
-  if (greenValue > redValue && greenValue > blueValue){
-    basketColour = "none";
-    ROS_INFO("NONE");
-  } else if (redValue > greenValue && redValue > blueValue){
-    basketColour = "red";
-    ROS_INFO("RED");
-  } else if (blueValue > redValue && blueValue > greenValue){
-    basketColour = "blue";
-    ROS_INFO("BLUE");
-  } else if (redValue == blueValue){
-    basketColour = "purple";
-    ROS_INFO("PURPLE");
-  } else{
-    basketColour = "Failed To Determine";
-  }
-  
-  return basketColour;
-}
-///////////////////////////////////////////////////////////////////////////////
-void
-cw1::colourImageCallback(const sensor_msgs::Image& msg)
-{
-  /* This is the callback function for the RGB camera subscriber */ 
-  this->colour_image_data = msg.data;
-
-  return;
-}
-///////////////////////////////////////////////////////////////////////////////
