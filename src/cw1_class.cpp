@@ -38,7 +38,10 @@ cw1::cw1(ros::NodeHandle nh):
   g_pub_pose = nh.advertise<geometry_msgs::PointStamped> ("cyld_pt", 1, true);
   
   // Initialise ROS Subscribers //
-  color_image_sub_ = nh_.subscribe("/r200/camera/color/image_raw", 1, &cw1::colorImageCallback, this);
+  image_sub_ = nh_.subscribe("/r200/camera/color/image_raw", 1, &cw1::colorImageCallback, this);
+  // Create a ROS subscriber for the input point cloud
+  cloud_sub_ = nh_.subscribe("/r200/camera/depth_registered/points", 1, &cw1::pointCloudCallback, this);
+  
 
   // Initialising the constants
   load_config();
@@ -355,13 +358,28 @@ cw1::task_2(std::vector<geometry_msgs::PointStamped> basket_locs)
   // Initialise string vector (Service Response)
   std::vector<std::string> basket_colors;
 
+  // Initialise output string
+  std::string output_string = "Baskets: [";
+
   // Survey each potential basket location
   for(unsigned int i = 0; i < basketNum; i++){
     // Determine color
     std::string basketColour = survey(basket_locs[i].point);
     // Add decision to vector
     basket_colors.push_back(basketColour);
+
+    // Add to output string
+    output_string += basketColour;
+    if (i < basketNum - 1){
+      output_string += ", ";
+    }
   }
+
+  // Print results
+  output_string += "]";
+  ROS_INFO("/////////////////////////////////////////////////////////////////////");
+  ROS_INFO("%s", output_string.c_str());
+  ROS_INFO("/////////////////////////////////////////////////////////////////////");
 
   return basket_colors;
 }
@@ -383,7 +401,6 @@ cw1::survey(geometry_msgs::Point point)
   // Move camera above object
   bool success = moveArm(image_pose);
   // Extract central pixel values from raw RGB data (Obtained from subsribed topic)
-  ROS_INFO("PHOTO CAPTURED");
   int redValue = color_image_data[color_image_midpoint_];
   int greenValue = color_image_data[color_image_midpoint_ + 1];
   int blueValue = color_image_data[color_image_midpoint_ + 2];
@@ -428,7 +445,7 @@ cw1::task_3()
   ROS_INFO("Starting to cluster");
 
   // Create snapshot of point cloud for processing
-  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGBA>);
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
   copyPointCloud(*g_cloud_filtered, *cloud);
 
   // Cluster the point cloud into separate objects
@@ -475,7 +492,6 @@ cw1::task_3()
   }
 
   ROS_INFO("Finished object identification");
-
   ROS_INFO("Starting pick and place operation");
 
   // Loop through all cubes

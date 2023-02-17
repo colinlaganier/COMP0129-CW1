@@ -50,7 +50,9 @@ foo@bar:~catkin_ws$ rosservice call /task 2
 ```
 The identified colours are outputted in the ROS console as such:
 ```console
-
+[ INFO] [1676647948.750793379, 36.816000000]: /////////////////////////////////////////////////////////////////////
+[ INFO] [1676647948.750808797, 36.816000000]: Baskets: [blue, red, purple, none]
+[ INFO] [1676647948.750822523, 36.816000000]: /////////////////////////////////////////////////////////////////////
 ```
 ### Task 3
 *Colin 33%, Jacob 33%, Carl 33% (65 hour)*
@@ -64,5 +66,7 @@ foo@bar:~catkin_ws$ rosservice call /task 2
 ```
 
 ---
+Github Repo: https://github.com/colinlaganier/COMP0129-CW1
+
 This project is [MIT](LICENSE) licensed.
 

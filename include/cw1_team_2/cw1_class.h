@@ -75,7 +75,7 @@ public:
 
   /** \brief Parameters for Task 2 */
   /** \brief ROS subscriber for the color image */
-  ros::Subscriber color_image_sub_;
+  ros::Subscriber image_sub_;
   /** \brief Camera data */
   std::vector<unsigned char, std::allocator<unsigned char> >color_image_data;
   /** \brief Camera Resolution */
@@ -88,6 +88,7 @@ public:
 
   /** \brief Parameters for Task 3 */
   /** \brief Set color variables for identification */
+  ros::Subscriber cloud_sub_;
   enum Color {red, blue, purple, green, none};
   Color Colors;
 
