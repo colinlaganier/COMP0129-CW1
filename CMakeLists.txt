@@ -96,13 +96,10 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 # Generate services in the 'srv' folder
-add_service_files(
-  FILES
-  # example.srv
-  set_arm.srv
-  pass_through.srv
-
-)
+# add_service_files(
+#   FILES
+#   # example.srv
+# )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -112,12 +109,12 @@ add_service_files(
 # )
 
 # Generate added messages and services with any dependencies listed here
-generate_messages(
-  DEPENDENCIES
-  std_msgs
-  geometry_msgs
-  sensor_msgs
-)
+# generate_messages(
+#   DEPENDENCIES
+#   std_msgs
+#   geometry_msgs
+#   sensor_msgs
+# )
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -173,6 +170,9 @@ include_directories(
 add_library(${PROJECT_NAME}_cw1_class_lib
   src/cw1_class.cpp
 )
+
+# configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.xml
+#     ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries

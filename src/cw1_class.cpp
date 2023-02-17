@@ -3,16 +3,17 @@
   * @file     cw1_class.cpp
   * @author   Colin Laganier, Jacob Nash, Carl Parsons
   * @date     2023-02-15
-  * @brief   This file contains the constructors and method for an IQS7222 Arduino library.
-  *          The goal of the library is to provide the functionalities for touch sensing
-  *			     to prototypes. Library derived from Azoteq's IQS266 library example.
+  * @brief   This file contains the constructor and methods for the cw1 class.
+  *          The class advertises the services for the coursework tasks and 
+  *          triggers the robot to perform the tasks.
   **********************************************************************************
-  * @attention  Requires standard Arduino Libraries: Arduino.h, Wire.h.
+  * @attention  Requires cw1.config file.
   */
 
 #include <cw1_team_2/cw1_class.h>
 
-#define CONFIG_FILE_PATH "./config/cw1.config"
+#define CONFIG_FILE_PATH "config.xml"
+
 
 // Not in use just added the PCL elements to check something 
 typedef pcl::PointXYZRGBA PointT;
@@ -46,10 +47,17 @@ cw1::cw1(ros::NodeHandle nh):
   
   // Initialise ROS Subscribers //
   colour_image_sub_ = nh_.subscribe("/r200/camera/color/image_raw", 1, &cw1::colourImageCallback, this);
-  // colour_image_sub_.subscribe(nh_, "/r200/camera/color/image_raw", 1);
-  // colour_image_sub_.registerCallback(boost::bind(&cw1::colourImageCallback, this, _1));
 
-  // Define public variables
+  load_config();
+
+  ROS_INFO("cw1 class initialised");
+}
+
+void cw1::load_config()
+{
+  // Define constants identified experimentally 
+  // Issues with loading from config file
+  
   g_pt_thrs_min = 0.0; // PassThrough min thres: Better in a config file
   g_pt_thrs_max = 0.77; // PassThrough max thres: Better in a config file
 
@@ -58,19 +66,12 @@ cw1::cw1(ros::NodeHandle nh):
   scan_position_.y = -0.0015;
   scan_position_.z = 0.8773;
 
-  ROS_INFO("cw1 class initialised");
-}
+  basket_height_ = 0.40;
+  cube_height_ = 0.15;
+  camera_offset_ = 0.0425;
+  cube_basket_cutoff_ = 1000;
+  position_precision_ = 1000.0;
 
-bool cw1::load_config()
-{
-  std::ifstream in(CONFIG_FILE_PATH);
-
-  if (!in.is_open())
-  {
-    ROS_ERROR("Cannot open configuration file from %s", CONFIG_FILE_PATH);
-    return false;
-  }
-  return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -142,14 +143,8 @@ cw1::colourImageCallback(const sensor_msgs::Image& msg)
         cw1::colour_image_height_ = msg.height;
 
         // Computing the index of the middle pixel
-        cw1::colour_image_middle_ = cw1::color_channels_ * ((cw1::colour_image_width_ * 
+        cw1::colour_image_midpoint_ = cw1::color_channels_ * ((cw1::colour_image_width_ * 
           (cw1::colour_image_height_ / 2)) + (cw1::colour_image_width_ / 2)) - cw1::color_channels_;
-        // Current output 70bbd -> pointer ?
-        ROS_ERROR("////////////////////////////////////////////////////////////////////////////////");
-        ROS_INFO("Image width: %d", cw1::colour_image_width_);
-        ROS_INFO("Image height: %d", cw1::colour_image_height_);
-        ROS_INFO("Middle pixel index: %x", cw1::colour_image_middle_);
-        ROS_ERROR("////////////////////////////////////////////////////////////////////////////////");
 
         return true;
     } ();
@@ -388,9 +383,9 @@ cw1::survey(geometry_msgs::Point point)
   bool success = moveArm(image_pose);
   // Extract central pixel values from raw RGB data (Obtained from subsribed topic)
   ROS_INFO("PHOTO CAPTURED");
-  int redValue = colour_image_data[461757];
-  int greenValue = colour_image_data[461758];
-  int blueValue = colour_image_data[461759];
+  int redValue = colour_image_data[colour_image_midpoint_];
+  int greenValue = colour_image_data[colour_image_midpoint_ + 1];
+  int blueValue = colour_image_data[colour_image_midpoint_ + 2];
 
   // Determine Colour of Basket
   std::string basketColour;
