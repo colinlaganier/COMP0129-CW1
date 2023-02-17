@@ -19,21 +19,6 @@ int main(int argc, char **argv){
 
   // loop rate in Hz
   ros::Rate rate(10);
-  
-  // // Create a ROS subscriber for the input point cloud
-  // ros::Subscriber sub =
-  //   nh.subscribe("/r200/camera/color/image_rect",
-  //                 1,
-  //                 &cw1::imageCallback,
-  //                 &cw_class);
-
-  // Create a ROS subscriber for the input point cloud
-  ros::Subscriber sub_cloud =
-    nh.subscribe ("/r200/camera/depth_registered/points",
-                  1,
-                  &cw1::pointCloudCallback,
-                  &cw_class);
-  
 
   while (ros::ok()) {
 
