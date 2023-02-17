@@ -46,7 +46,7 @@ cw1::cw1(ros::NodeHandle nh):
   g_pub_pose = nh.advertise<geometry_msgs::PointStamped> ("cyld_pt", 1, true);
   
   // Initialise ROS Subscribers //
-  colour_image_sub_ = nh_.subscribe("/r200/camera/color/image_raw", 1, &cw1::colourImageCallback, this);
+  color_image_sub_ = nh_.subscribe("/r200/camera/color/image_raw", 1, &cw1::colorImageCallback, this);
 
   load_config();
 
@@ -56,10 +56,13 @@ cw1::cw1(ros::NodeHandle nh):
 void cw1::load_config()
 {
   // Define constants identified experimentally 
-  // Issues with loading from config file
-  
-  g_pt_thrs_min = 0.0; // PassThrough min thres: Better in a config file
-  g_pt_thrs_max = 0.77; // PassThrough max thres: Better in a config file
+  // Issues with loading from config file (yaml, xml)
+
+  approach_distance_ = 0.25;
+  angle_offset_ = 3.14159 / 4.0;
+
+  g_pt_thrs_min = 0.0; // PassThrough min thres
+  g_pt_thrs_max = 0.77; // PassThrough max thres
 
   // Defining the scanning position for task 3
   scan_position_.x = 0.3773;
@@ -101,15 +104,9 @@ cw1::t2_callback(cw1_world_spawner::Task2Service::Request &request,
 
   ROS_INFO("The coursework solving callback for task 2 has been triggered");
 
-  std::vector<std::string> colours = task_2(request.basket_locs);
+  std::vector<std::string> colors = task_2(request.basket_locs);
 
-  // for (int i = 0; i < colours.size(); i++)
-  for (auto basket : colours)
-  {
-    ROS_INFO("%s", basket.c_str());
-  }
-
-  response.basket_colours = colours;
+  response.basket_colours = colors;
   
   return true;
 }
@@ -132,24 +129,24 @@ cw1::t3_callback(cw1_world_spawner::Task3Service::Request &request,
 ///////////////////////////////////////////////////////////////////////////////
 
 void
-cw1::colourImageCallback(const sensor_msgs::Image& msg)
+cw1::colorImageCallback(const sensor_msgs::Image& msg)
 {
   /* This is the callback function for the RGB camera subscriber */ 
   
   // Setting up the static variables at the first callback 
   static bool setup = [&](){
         // Camera feed resolution
-        cw1::colour_image_width_ = msg.width;
-        cw1::colour_image_height_ = msg.height;
+        cw1::color_image_width_ = msg.width;
+        cw1::color_image_height_ = msg.height;
 
         // Computing the index of the middle pixel
-        cw1::colour_image_midpoint_ = cw1::color_channels_ * ((cw1::colour_image_width_ * 
-          (cw1::colour_image_height_ / 2)) + (cw1::colour_image_width_ / 2)) - cw1::color_channels_;
+        cw1::color_image_midpoint_ = cw1::color_channels_ * ((cw1::color_image_width_ * 
+          (cw1::color_image_height_ / 2)) + (cw1::color_image_width_ / 2)) - cw1::color_channels_;
 
         return true;
     } ();
 
-  this->colour_image_data = msg.data;
+  this->color_image_data = msg.data;
 
   return;
 }
@@ -220,7 +217,6 @@ cw1::pickPlace(geometry_msgs::Point object, geometry_msgs::Point target)
   // DEFINE GRIPPER POSES //
   // Grasping Object //
   geometry_msgs::Pose grasp_pose = point2Pose(object);
-  // grasp_pose.position.z += z_offset_; // Offset to align cube with gripper
   grasp_pose.position.z = cube_height_; // Position gripper above object
   // Approach and Takeaway //
   geometry_msgs::Pose offset_pose = grasp_pose;
@@ -228,7 +224,7 @@ cw1::pickPlace(geometry_msgs::Point object, geometry_msgs::Point target)
   // Releasing Object //
   geometry_msgs::Pose release_pose = grasp_pose;
   release_pose.position = target;
-  release_pose.position.z += 0.325; // Position gripper above basket
+  release_pose.position.z = basket_height_; // Position gripper above basket
 
   // PERFORM PICK //
   bool success = true;
@@ -352,17 +348,17 @@ cw1::task_2(std::vector<geometry_msgs::PointStamped> basket_locs)
   int basketNum = basket_locs.size();
 
   // Initialise string vector (Service Response)
-  std::vector<std::string> basket_colours;
+  std::vector<std::string> basket_colors;
 
   // Survey each potential basket location
   for(unsigned int i = 0; i < basketNum; i++){
-    // Determine colour
+    // Determine color
     std::string basketColour = survey(basket_locs[i].point);
     // Add decision to vector
-    basket_colours.push_back(basketColour);
+    basket_colors.push_back(basketColour);
   }
 
-  return basket_colours;
+  return basket_colors;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -372,7 +368,7 @@ cw1::task_2(std::vector<geometry_msgs::PointStamped> basket_locs)
 std::string
 cw1::survey(geometry_msgs::Point point)
 {
-  /* This function will return the colour shown in camera, given a point of interest*/
+  /* This function will return the color shown in camera, given a point of interest*/
 
   // Define imaging pose
   geometry_msgs::Pose image_pose = point2Pose(point);
@@ -383,9 +379,9 @@ cw1::survey(geometry_msgs::Point point)
   bool success = moveArm(image_pose);
   // Extract central pixel values from raw RGB data (Obtained from subsribed topic)
   ROS_INFO("PHOTO CAPTURED");
-  int redValue = colour_image_data[colour_image_midpoint_];
-  int greenValue = colour_image_data[colour_image_midpoint_ + 1];
-  int blueValue = colour_image_data[colour_image_midpoint_ + 2];
+  int redValue = color_image_data[color_image_midpoint_];
+  int greenValue = color_image_data[color_image_midpoint_ + 1];
+  int blueValue = color_image_data[color_image_midpoint_ + 2];
 
   // Determine Colour of Basket
   std::string basketColour;
@@ -489,7 +485,7 @@ cw1::task_3()
     // Verify that a basket was found for given cube
     if (target_basket.is_empty)
     {
-      ROS_INFO("No basket matching cube colour found");
+      ROS_INFO("No basket matching cube color found");
       continue;
     }
 
@@ -588,7 +584,7 @@ cw1::identify_basket(std::tuple<geometry_msgs::Point, Color> cube,
   // Loop through every baskets
   for (const auto &basket : basket_data)
   {
-    // If basket and cube are the same colour
+    // If basket and cube are the same color
     if (std::get<1>(basket) == std::get<1>(cube))
     {
       // Calculate distance between cube and basket

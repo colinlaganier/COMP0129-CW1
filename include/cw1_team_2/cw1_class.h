@@ -70,34 +70,45 @@ public:
   double gripper_closed_ = 0.0;
 
   /** \brief Parameters for Task 1 */
-  double z_offset_ = 0.125;
-  double angle_offset_ = 3.14159 / 4.0;
-  double approach_distance_ = 0.25;  
+  double angle_offset_;
+  double approach_distance_;  
 
   /** \brief Parameters for Task 2 */
-  std::vector<unsigned char, std::allocator<unsigned char> >colour_image_data;
-  ros::Subscriber colour_image_sub_;
-  int colour_image_width_;
-  int colour_image_height_;
-  int colour_image_midpoint_;
+  /** \brief ROS subscriber for the color image */
+  ros::Subscriber color_image_sub_;
+  /** \brief Camera data */
+  std::vector<unsigned char, std::allocator<unsigned char> >color_image_data;
+  /** \brief Camera Resolution */
+  int color_image_width_;
+  int color_image_height_;
+  /** \brief Pixel array midpoint */
+  int color_image_midpoint_;
+  /** \brief Number of colour channels (RGB) */
   int color_channels_ = 3;
 
   /** \brief Parameters for Task 3 */
+  /** \brief Set color variables for identification */
   enum Color {red, blue, purple, green, none};
   Color Colors;
 
+  /** \brief Struct object to use for basket identification */
   struct TargetBasket {
     geometry_msgs::Point coordinates;
     // Initialising distance to 100m to ensure that the first basket is always the closest
     float distance_to_cube = 100;
     bool is_empty = true;
   };
-
+  /** \brief Height to drop cube from */
   float basket_height_;
+  /** \brief Height to grab cube from */
   float cube_height_;
+  /** \brief Camera offset from hand */
   float camera_offset_;
+  /** \brief Cluster cutoff size */
   int cube_basket_cutoff_;
+  /** \brief Rounding precision value */
   double position_precision_;
+  /** \brief Arm position to scan entire environment */
   geometry_msgs::Point scan_position_;
 
   /** \brief Node handle. */
@@ -174,7 +185,7 @@ public:
   
   /** \brief RGB camera image callback function*/
   void 
-  colourImageCallback(const sensor_msgs::Image& msg);
+  colorImageCallback(const sensor_msgs::Image& msg);
 
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -235,7 +246,7 @@ public:
     *
     * \input[in] basket_locs vector of basket positions
     * 
-    * \return vector of basket colours in the order they are found
+    * \return vector of basket colors in the order they are found
     */
   std::vector<std::string>
   task_2(std::vector<geometry_msgs::PointStamped> basket_locs);
@@ -249,12 +260,12 @@ public:
   geometry_msgs::Pose
   point2Pose(geometry_msgs::Point point);
 
-  /** \brief Function to identify the colour of the basket based on
+  /** \brief Function to identify the color of the basket based on
     * the current camera feed and a given position.
     *
     * \input[in] basket_loc location of the basket of interest
     *
-    * \return colour of the cube
+    * \return color of the cube
     */
   std::string
   survey(geometry_msgs::Point basket_loc);
@@ -264,14 +275,14 @@ public:
   ////////////////////////////////////////////////////////////////////////////////
 
   /** \brief Task 3 function, identify the cubes and backets in the scene
-    * and place the cube in the correct basket based on their colour and baskets. 
+    * and place the cube in the correct basket based on their color and baskets. 
     * 
     * \return true if every possible cube is placed in a basket
     */
   bool 
   task_3();
 
-  /** \brief Function to identify the colour of the cube based on
+  /** \brief Function to identify the color of the cube based on
     *   the RGB value of a point in the point cloud.  
     *
     * \input[in] rgb RGB value of the point
@@ -293,16 +304,15 @@ public:
 
   /** \brief Function to identify a basket that matches the cube.
     *
-    * \input[in] cube tuple of cube location and colour
-    * \input[in] basket_data vector of basket locations and colours
+    * \input[in] cube tuple of cube location and color
+    * \input[in] basket_data vector of basket locations and colors
     *
-    * \return a TargetBasket struct containing the basket location and colour
+    * \return a TargetBasket struct containing the basket location and color
     */
   cw1::TargetBasket 
   identify_basket(std::tuple<geometry_msgs::Point, Color> cube, 
     std::vector<std::tuple<geometry_msgs::Point, Color>> &basket_data);
 
-  
 protected:
   /** \brief Debug mode. */
   bool debug_;
