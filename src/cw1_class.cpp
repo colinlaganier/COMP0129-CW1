@@ -12,14 +12,6 @@
 
 #include <cw1_team_2/cw1_class.h>
 
-#define CONFIG_FILE_PATH "config.xml"
-
-
-// Not in use just added the PCL elements to check something 
-typedef pcl::PointXYZRGBA PointT;
-typedef pcl::PointCloud<PointT> PointC;
-typedef PointC::Ptr PointCPtr;
-
 ////////////////////////////////////////////////////////////////////////////////
 // Constructor
 ////////////////////////////////////////////////////////////////////////////////
@@ -48,6 +40,7 @@ cw1::cw1(ros::NodeHandle nh):
   // Initialise ROS Subscribers //
   color_image_sub_ = nh_.subscribe("/r200/camera/color/image_raw", 1, &cw1::colorImageCallback, this);
 
+  // Initialising the constants
   load_config();
 
   ROS_INFO("cw1 class initialised");

@@ -17,43 +17,8 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_ros
   pcl_ros
   cw1_world_spawner
-  # image_transport
   sensor_msgs
-  # cv_bridge
 )
-
-# find_package(Boost REQUIRED COMPONENTS system)
-# include_directories(${Boost_INCLUDE_DIR})
-# link_directories(${Boost_LIBRARY_DIR})
-# find_package(OpenCV PATHS /usr/lib/x86_64-linux-gnu/cmake/opencv4 REQUIRED)
-
-# set(OpenCV_DIR /usr/lib/x86_64-linux-gnu/cmake/opencv4)
-# find_package(OpenCV REQUIRED)
-# include_directories(${OpenCV_INCLUDE_DIRS})
-# link_directories(${OpenCV_LIBRARY_DIRS})
-# add_definitions(${OpenCV_DEFINITIONS})
-
-# # cv_bridge
-# # set(cv_bridge_DIR /usr/local/share/cv_bridge/cmake)
-# find_package(cv_bridge PATHS /opt/ros/noetic/share/cv_bridge/cmake REQUIRED)
-# include_directories(${cv_bridge_INCLUDE_DIRS})
-# link_directories(${cv_bridge_LIBRARY_DIRS})
-# add_definitions(${cv_bridge_DEFINITIONS})
-
-# # include_directories(include ${Boost_INCLUDE_DIRS})
-
-
-# set(OpenCV_LIBS opencv_core opencv_imgproc opencv_calib3d opencv_video opencv_features2d opencv_ml opencv_highgui opencv_objdetect)
-
-
-# If the package has been found, several variables will
-# be set, you can find the full list with descriptions
-# in the OpenCVConfig.cmake file.
-# Print some message showing some of them
-# message(STATUS "OpenCV library status:")
-# message(STATUS "    version: ${OpenCV_VERSION}")
-# message(STATUS "    libraries: ${OpenCV_LIBS}")
-# message(STATUS "    include path: ${OpenCV_INCLUDE_DIRS}")
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
