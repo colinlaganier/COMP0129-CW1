@@ -74,7 +74,6 @@ void cw1::load_config()
   camera_offset_ = 0.0425;
   cube_basket_cutoff_ = 1000;
   position_precision_ = 1000.0;
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -85,7 +84,7 @@ bool
 cw1::t1_callback(cw1_world_spawner::Task1Service::Request &request,
   cw1_world_spawner::Task1Service::Response &response) 
 {
-  /* function which should solve task 1 */
+  /* Function solving Task 1 */
 
   ROS_INFO("The coursework solving callback for task 1 has been triggered");
 
@@ -100,7 +99,7 @@ bool
 cw1::t2_callback(cw1_world_spawner::Task2Service::Request &request,
   cw1_world_spawner::Task2Service::Response &response)
 {
-  /* function which should solve task 2 */
+  /* Function solving Task 2 */
 
   ROS_INFO("The coursework solving callback for task 2 has been triggered");
 
@@ -117,7 +116,7 @@ bool
 cw1::t3_callback(cw1_world_spawner::Task3Service::Request &request,
   cw1_world_spawner::Task3Service::Response &response)
 {
-  /* function which should solve task 3 */
+  /* Function solving Task 3 */
 
   ROS_INFO("The coursework solving callback for task 3 has been triggered");
 
@@ -157,6 +156,8 @@ void
 cw1::pointCloudCallback
   (const sensor_msgs::PointCloud2ConstPtr &cloud_input_msg)
 {
+  /* This is the callback function for the point cloud subscriber */
+
   // Extract inout point cloud info
   g_input_pc_frame_id_ = cloud_input_msg->header.frame_id;
     
@@ -181,6 +182,8 @@ void
 cw1::pubFilteredPCMsg (ros::Publisher &pc_pub,
                                PointC &pc)
 {
+  /* This function publishes the filtered pointcloud */
+
   // Publish the data
   pcl::toROSMsg(pc, g_cloud_filtered_msg);
   pc_pub.publish (g_cloud_filtered_msg);
@@ -194,11 +197,18 @@ void
 cw1::applyPT (PointCPtr &in_cloud_ptr,
                       PointCPtr &out_cloud_ptr)
 {
+  /* Function applying the pass through filter */
+
   g_pt.setInputCloud (in_cloud_ptr);
+  
+  // Enlarging the x limits to include the whole plane
   g_pt.setFilterFieldName ("x");
   g_pt.setFilterLimits(-1.0, 1.0);
+
+  // Restricting the z limits to the top of the cubes
   g_pt.setFilterFieldName ("z");
   g_pt.setFilterLimits (g_pt_thrs_min, g_pt_thrs_max);
+  
   g_pt.filter (*out_cloud_ptr);
   
   return;
@@ -344,6 +354,8 @@ cw1::point2Pose(geometry_msgs::Point point){
 std::vector<std::string>
 cw1::task_2(std::vector<geometry_msgs::PointStamped> basket_locs)
 {
+  /* Function identifying the colour of the baskets based on their location */
+
   // Determine number of baskets
   int basketNum = basket_locs.size();
 
@@ -412,6 +424,9 @@ cw1::survey(geometry_msgs::Point point)
 bool 
 cw1::task_3()
 {
+  /* Function identifying cubes in the environment and sorting them in the 
+     correct basket */
+
   // Move robot and camera to scannning pose 
   geometry_msgs::Pose scan_pose = point2Pose(scan_position_);
   bool success = true;
@@ -424,7 +439,7 @@ cw1::task_3()
   copyPointCloud(*g_cloud_filtered, *cloud);
 
   // Cluster the point cloud into separate objects
-  std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> clusters = cluster_pointclouds(cloud);
+  std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> clusters = clusterPointclouds(cloud);
 
   ROS_INFO("Finished clustering");
 
@@ -453,7 +468,7 @@ cw1::task_3()
     uint32_t rgb = *reinterpret_cast<int*>(&cluster->points[random_point].rgb);
 
     // Identifies the color of the cluster
-    Color cluster_color = identify_color(rgb);
+    Color cluster_color = identifyColor(rgb);
 
     // Identifies if cluster is a cube or a box and adds it to the correct vector
     if (cluster->size() < cube_basket_cutoff_)
@@ -480,7 +495,7 @@ cw1::task_3()
     cube_point.z = 0.0;
 
     // Identify target basket based on current cube color and position
-    TargetBasket target_basket = identify_basket(cube, basket_data);
+    TargetBasket target_basket = identifyBasket(cube, basket_data);
 
     // Verify that a basket was found for given cube
     if (target_basket.is_empty)
@@ -503,8 +518,10 @@ cw1::task_3()
 ////////////////////////////////////////////////////////////////////////////////
 
 std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr>
-cw1::cluster_pointclouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
+cw1::clusterPointclouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
 {
+  /* Function clustering point clouds in individual groups */
+
   // Vector to store the clusters
   std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> clusters;
 
@@ -543,8 +560,10 @@ cw1::cluster_pointclouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-cw1::Color cw1::identify_color(uint32_t rgb)
+cw1::Color cw1::identifyColor(uint32_t rgb)
 {
+  /* Function classifying the cube colour based on its rgb value */
+
   // Unpack RGB values from point
   uint8_t r = (rgb >> 16) & 0x0000ff;
   uint8_t g = (rgb >> 8)  & 0x0000ff;
@@ -576,9 +595,11 @@ cw1::Color cw1::identify_color(uint32_t rgb)
 ///////////////////////////////////////////////////////////////////////////////
 
 cw1::TargetBasket 
-cw1::identify_basket(std::tuple<geometry_msgs::Point, Color> cube, 
+cw1::identifyBasket(std::tuple<geometry_msgs::Point, Color> cube, 
   std::vector<std::tuple<geometry_msgs::Point, Color>> &basket_data)
 {
+  /* Function matching a given cube with its corresponding basket */
+
   // Create a target basket object to store the basket position and distance to cube
   TargetBasket target_basket; 
   // Loop through every baskets

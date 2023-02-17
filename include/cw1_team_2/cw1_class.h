@@ -290,7 +290,7 @@ public:
     * \return Colour of the cube
     */
   Color 
-  identify_color(uint32_t rgb);
+  identifyColor(uint32_t rgb);
 
     /** \brief Function to cluster the group of point clouds into
     *  individual point clouds.
@@ -300,7 +300,7 @@ public:
     * \return vector of individual point clouds
     */
   std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> 
-  cluster_pointclouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
+  clusterPointclouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
 
   /** \brief Function to identify a basket that matches the cube.
     *
@@ -310,7 +310,7 @@ public:
     * \return a TargetBasket struct containing the basket location and color
     */
   cw1::TargetBasket 
-  identify_basket(std::tuple<geometry_msgs::Point, Color> cube, 
+  identifyBasket(std::tuple<geometry_msgs::Point, Color> cube, 
     std::vector<std::tuple<geometry_msgs::Point, Color>> &basket_data);
 
 protected:
