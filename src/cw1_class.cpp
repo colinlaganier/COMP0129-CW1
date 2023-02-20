@@ -7,7 +7,7 @@
   *          The class advertises the services for the coursework tasks and 
   *          triggers the robot to perform the tasks.
   **********************************************************************************
-  * @attention  Requires cw1.config file.
+  * @attention  Requires cw1_class header file.
   */
 
 #include <cw1_team_2/cw1_class.h>
@@ -22,7 +22,6 @@ cw1::cw1(ros::NodeHandle nh):
   debug_ (false)
 {
   /* class constructor */
-
   nh_ = nh;
 
   // advertise solutions for coursework tasks
@@ -54,21 +53,27 @@ void cw1::load_config()
   // Define constants identified experimentally 
   // Issues with loading from config file (yaml, xml)
 
+  // Pick and place constants
   approach_distance_ = 0.25;
+  // Angle offset to align gripper with cube
   angle_offset_ = 3.14159 / 4.0;
 
-  g_pt_thrs_min = 0.0; // PassThrough min thres
-  g_pt_thrs_max = 0.77; // PassThrough max thres
+  // Pointcloud PassThrough threshold to restrict the pointcloud to the objects
+  g_pt_thrs_min = 0.0; 
+  g_pt_thrs_max = 0.77; 
 
-  // Defining the scanning position for task 3
+  // Defining the Robot scanning position for task 3
   scan_position_.x = 0.3773;
   scan_position_.y = -0.0015;
   scan_position_.z = 0.8773;
 
+  // Positions of the gripper for the different tasks 
   basket_height_ = 0.40;
   cube_height_ = 0.15;
   camera_offset_ = 0.0425;
+  // Pointcloud cutoff threshold for object identification
   cube_basket_cutoff_ = 1000;
+  // Precision of the estimated object position
   position_precision_ = 1000.0;
 }
 

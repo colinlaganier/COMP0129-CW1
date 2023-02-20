@@ -1,7 +1,13 @@
-/* feel free to change any part of this file, or delete this file. In general,
-you can do whatever you want with this template code, including deleting it all
-and starting from scratch. The only requirment is to make sure your entire 
-solution is contained within the cw1_team_<your_team_number> package */
+/**
+  **********************************************************************************
+  * @file     cw1_node.cpp
+  * @author   Colin Laganier, Jacob Nash, Carl Parsons
+  * @date     2023-02-15
+  * @brief   This file contains the main function for the cw1 node. It creates an 
+  *          instance of the cw1 class and runs the main loop. 
+  **********************************************************************************
+  * @attention  Requires cw1_class header file and the ROS backend.
+  */
 
 #include <cw1_team_2/cw1_class.h>
 
