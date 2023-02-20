@@ -59,7 +59,7 @@ The identified colours are outputted in the ROS console as such:
 
 ![Task_3](figures/task_3.png)
 
-Goal of task 3 is to identify the cubes and baskets in the environment and placing each cube into a basket of the same colour if possible. No coordinates are given and are instead computed using the depth camera. 
+Goal of Task 3 is to identify the cubes and baskets in the environment and placing each cube into a basket of the same colour if possible. No coordinates are given and are instead computed using the depth camera, the /task 3 service triggers the task. 
 
 ```console
 foo@bar:~catkin_ws$ rosservice call /task 3
